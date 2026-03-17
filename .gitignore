@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.env
+.venv/
+venv/
+workspace/
+!workspace/.gitkeep
+chroma_data/
+*.db
+.DS_Store
