@@ -1,4 +1,9 @@
-"""Portfolio management API routes."""
+"""Portfolio management API routes.
+
+Portfolio runs are persisted to the portfolio_cycles table.
+In-memory dict _portfolio_runs holds live state for running portfolios.
+On list/status, we merge in-memory (for running) with DB (for history).
+"""
 from __future__ import annotations
 
 import asyncio
@@ -20,7 +25,7 @@ router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 # Set by main.py after the portfolio graph is built
 _compiled_portfolio_graph = None
 
-# In-memory store for running portfolio states (state updated during stream for progress)
+# In-memory store for RUNNING portfolio states (live progress updates)
 _portfolio_runs: Dict[str, dict] = {}
 
 
@@ -81,6 +86,71 @@ class PortfolioStatusResponse(BaseModel):
     messages: List[dict] = []
 
 
+# --- Helper: build status response from state dict ---
+
+def _build_status_response(portfolio_id: str, state: dict, status: str) -> PortfolioStatusResponse:
+    """Build a PortfolioStatusResponse from a state dict."""
+    raw_opps = state.get("opportunities", [])
+    opportunities = []
+    for o in raw_opps[-20:]:
+        if isinstance(o, dict):
+            opportunities.append(OpportunityItem(
+                title=o.get("title", ""),
+                description=o.get("description", ""),
+                estimated_impact=o.get("estimated_impact", o.get("impact", "")),
+            ))
+
+    raw_decisions = state.get("portfolio_decisions", [])
+    decisions = []
+    for d in raw_decisions:
+        if isinstance(d, dict):
+            decisions.append(DecisionItem(
+                agent=d.get("agent", ""),
+                phase=d.get("phase", ""),
+                reasoning=d.get("reasoning", d.get("decision", "")),
+                funded=[f if isinstance(f, str) else f.get("title", "") for f in d.get("funded", [])],
+                killed=d.get("killed", []),
+                scaled=d.get("scaled", []),
+            ))
+
+    raw_results = state.get("execution_results", [])
+    results = []
+    for r in raw_results:
+        if isinstance(r, dict):
+            results.append(ExecutionResultItem(
+                title=r.get("title", ""),
+                initiative_id=r.get("initiative_id", ""),
+                action=r.get("action", ""),
+                verdict=r.get("verdict", ""),
+                budget_spent=r.get("budget_spent", 0),
+                tasks_executed=r.get("tasks_executed", 0),
+            ))
+
+    raw_messages = state.get("messages", [])
+    messages = raw_messages[-50:] if raw_messages else []
+
+    return PortfolioStatusResponse(
+        portfolio_id=portfolio_id,
+        current_phase=state.get("current_phase", "starting"),
+        cycle_count=state.get("cycle_count", 0),
+        max_cycles=state.get("max_cycles", 0),
+        budget_spent=state.get("budget_spent", 0),
+        budget_remaining=state.get("budget_remaining", 0),
+        total_budget=state.get("total_budget", 0),
+        opportunities_found=len(state.get("opportunities", [])),
+        initiatives_funded=len(state.get("funded_initiatives", [])),
+        initiatives_killed=len(state.get("killed_initiatives", [])),
+        execution_results=len(state.get("execution_results", [])),
+        status=status,
+        company_goals=state.get("company_goals", []),
+        opportunities=opportunities,
+        portfolio_decisions=decisions,
+        results=results,
+        errors=state.get("errors", []),
+        messages=messages,
+    )
+
+
 # --- Endpoints ---
 
 
@@ -92,12 +162,35 @@ async def run_portfolio(req: RunPortfolioRequest):
 
     portfolio_id = str(uuid.uuid4())
     workspace_path = req.workspace_path or settings.workspace_path
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
 
+    # Create DB record
+    try:
+        from aeco.db.session import async_session_factory
+        from aeco.models.portfolio_cycle import PortfolioCycle
+        async with async_session_factory() as session:
+            cycle = PortfolioCycle(
+                id=uuid.UUID(portfolio_id),
+                status="running",
+                current_phase="starting",
+                company_goals=req.company_goals,
+                max_cycles=req.max_cycles,
+                workspace_path=workspace_path,
+                total_budget=req.total_budget,
+                budget_remaining=req.total_budget,
+                started_at=now,
+                updated_at=now,
+            )
+            session.add(cycle)
+            await session.commit()
+    except Exception as e:
+        logger.warning(f"Failed to persist portfolio run to DB: {e}")
+
+    # In-memory for live progress
     _portfolio_runs[portfolio_id] = {
         "status": "running",
         "state": None,
-        "started_at": now,
+        "started_at": now.isoformat(),
         "completed_at": None,
     }
 
@@ -114,76 +207,25 @@ async def run_portfolio(req: RunPortfolioRequest):
 
 @router.get("/{portfolio_id}/status", response_model=PortfolioStatusResponse)
 async def get_portfolio_status(portfolio_id: str):
-    """Get the current status of a portfolio run."""
+    """Get the current status of a portfolio run (live from memory or historical from DB)."""
+    # First check in-memory (running or recently completed)
     run = _portfolio_runs.get(portfolio_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Portfolio run not found")
+    if run:
+        state = run.get("state") or {}
+        return _build_status_response(portfolio_id, state, run.get("status", "unknown"))
 
-    state = run.get("state") or {}
+    # Fall back to DB
+    try:
+        from aeco.db.session import async_session_factory
+        from aeco.models.portfolio_cycle import PortfolioCycle
+        async with async_session_factory() as session:
+            db_cycle = await session.get(PortfolioCycle, uuid.UUID(portfolio_id))
+            if db_cycle:
+                return PortfolioStatusResponse(**db_cycle.to_status_dict())
+    except Exception as e:
+        logger.warning(f"DB lookup failed for portfolio {portfolio_id}: {e}")
 
-    # Build opportunity items
-    raw_opps = state.get("opportunities", [])
-    opportunities = []
-    for o in raw_opps[-20:]:  # cap at 20
-        if isinstance(o, dict):
-            opportunities.append(OpportunityItem(
-                title=o.get("title", ""),
-                description=o.get("description", ""),
-                estimated_impact=o.get("estimated_impact", o.get("impact", "")),
-            ))
-
-    # Build decision items
-    raw_decisions = state.get("portfolio_decisions", [])
-    decisions = []
-    for d in raw_decisions:
-        if isinstance(d, dict):
-            decisions.append(DecisionItem(
-                agent=d.get("agent", ""),
-                phase=d.get("phase", ""),
-                reasoning=d.get("reasoning", d.get("decision", "")),
-                funded=[f if isinstance(f, str) else f.get("title", "") for f in d.get("funded", [])],
-                killed=d.get("killed", []),
-                scaled=d.get("scaled", []),
-            ))
-
-    # Build execution result items
-    raw_results = state.get("execution_results", [])
-    results = []
-    for r in raw_results:
-        if isinstance(r, dict):
-            results.append(ExecutionResultItem(
-                title=r.get("title", ""),
-                initiative_id=r.get("initiative_id", ""),
-                action=r.get("action", ""),
-                verdict=r.get("verdict", ""),
-                budget_spent=r.get("budget_spent", 0),
-                tasks_executed=r.get("tasks_executed", 0),
-            ))
-
-    # Messages (last 30 for the activity log)
-    raw_messages = state.get("messages", [])
-    messages = raw_messages[-30:] if raw_messages else []
-
-    return PortfolioStatusResponse(
-        portfolio_id=portfolio_id,
-        current_phase=state.get("current_phase", "starting"),
-        cycle_count=state.get("cycle_count", 0),
-        max_cycles=state.get("max_cycles", 0),
-        budget_spent=state.get("budget_spent", 0),
-        budget_remaining=state.get("budget_remaining", 0),
-        total_budget=state.get("total_budget", 0),
-        opportunities_found=len(state.get("opportunities", [])),
-        initiatives_funded=len(state.get("funded_initiatives", [])),
-        initiatives_killed=len(state.get("killed_initiatives", [])),
-        execution_results=len(state.get("execution_results", [])),
-        status=run.get("status", "unknown"),
-        company_goals=state.get("company_goals", []),
-        opportunities=opportunities,
-        portfolio_decisions=decisions,
-        results=results,
-        errors=state.get("errors", []),
-        messages=messages,
-    )
+    raise HTTPException(status_code=404, detail="Portfolio run not found")
 
 
 @router.post("/{portfolio_id}/stop")
@@ -191,16 +233,21 @@ async def stop_portfolio(portfolio_id: str):
     """Request graceful stop of a portfolio run after the current cycle."""
     run = _portfolio_runs.get(portfolio_id)
     if not run:
-        raise HTTPException(status_code=404, detail="Portfolio run not found")
+        raise HTTPException(status_code=404, detail="Portfolio run not found or not running")
     run["stop_requested"] = True
     return {"portfolio_id": portfolio_id, "message": "Stop requested; will complete after current cycle"}
 
 
 @router.get("", response_model=list)
 async def list_portfolio_runs():
-    """List all portfolio runs (newest first). History and progress from current process."""
-    items = [
-        {
+    """List all portfolio runs (newest first). Merges in-memory running + DB history."""
+    seen_ids = set()
+    items = []
+
+    # In-memory running/recent
+    for pid, run in _portfolio_runs.items():
+        seen_ids.add(pid)
+        items.append({
             "portfolio_id": pid,
             "status": run.get("status", "unknown"),
             "current_phase": (run.get("state") or {}).get("current_phase", "starting"),
@@ -208,10 +255,26 @@ async def list_portfolio_runs():
             "completed_at": run.get("completed_at"),
             "cycle_count": (run.get("state") or {}).get("cycle_count", 0),
             "max_cycles": (run.get("state") or {}).get("max_cycles", 0),
-        }
-        for pid, run in _portfolio_runs.items()
-    ]
-    # Newest first (by started_at)
+        })
+
+    # DB history (last 50, excluding already-seen)
+    try:
+        from aeco.db.session import async_session_factory
+        from aeco.models.portfolio_cycle import PortfolioCycle
+        from sqlalchemy import select
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(PortfolioCycle)
+                .order_by(PortfolioCycle.started_at.desc())
+                .limit(50)
+            )
+            for db_cycle in result.scalars():
+                pid = str(db_cycle.id)
+                if pid not in seen_ids:
+                    items.append(db_cycle.to_list_item())
+    except Exception as e:
+        logger.warning(f"Failed to load portfolio history from DB: {e}")
+
     items.sort(key=lambda x: x.get("started_at") or "", reverse=True)
     return items
 
@@ -289,6 +352,23 @@ async def reject_request(approval_id: str):
 # --- Internal ---
 
 
+async def _persist_state(portfolio_id: str, state: dict, status: str = "running") -> None:
+    """Persist current portfolio state to DB (best-effort, non-blocking)."""
+    try:
+        from aeco.db.session import async_session_factory
+        from aeco.models.portfolio_cycle import PortfolioCycle
+        async with async_session_factory() as session:
+            db_cycle = await session.get(PortfolioCycle, uuid.UUID(portfolio_id))
+            if db_cycle:
+                db_cycle.status = status
+                db_cycle.update_from_state(state)
+                if status in ("completed", "failed", "stopped"):
+                    db_cycle.completed_at = datetime.now(timezone.utc)
+                await session.commit()
+    except Exception as e:
+        logger.debug(f"Failed to persist portfolio state: {e}")
+
+
 async def _execute_portfolio(
     portfolio_id: str,
     company_goals: list[str],
@@ -324,7 +404,6 @@ async def _execute_portfolio(
             f"{len(company_goals)} goals, max {max_cycles} cycles, ${total_budget} budget"
         )
 
-        # Stream state updates so UI can show progress (current_phase, cycle, etc.)
         run_entry = _portfolio_runs.get(portfolio_id) or {}
         run_entry["state"] = dict(initial_state)
         _portfolio_runs[portfolio_id] = run_entry
@@ -338,6 +417,8 @@ async def _execute_portfolio(
                     if isinstance(state, dict):
                         final_state = state
                         _portfolio_runs[portfolio_id]["state"] = state
+                        # Persist progress to DB periodically
+                        await _persist_state(portfolio_id, state, "running")
         except Exception as stream_err:
             logger.warning(f"Portfolio stream failed, falling back to ainvoke: {stream_err}")
             final_state = await _compiled_portfolio_graph.ainvoke(initial_state)
@@ -349,6 +430,9 @@ async def _execute_portfolio(
         now_iso = datetime.now(timezone.utc).isoformat()
         _portfolio_runs[portfolio_id]["status"] = "completed"
         _portfolio_runs[portfolio_id]["completed_at"] = now_iso
+
+        # Persist final state to DB
+        await _persist_state(portfolio_id, final_state, "completed")
 
         cycles = final_state.get("cycle_count", 0)
         spent = final_state.get("budget_spent", 0)
@@ -362,9 +446,12 @@ async def _execute_portfolio(
         logger.error(f"Portfolio run failed: {e}", exc_info=True)
         now_iso = datetime.now(timezone.utc).isoformat()
         existing = _portfolio_runs.get(portfolio_id) or {}
+        failed_state = {**(existing.get("state") or {}), "current_phase": "failed", "error": str(e)}
         _portfolio_runs[portfolio_id] = {
             **existing,
             "status": "failed",
-            "state": {**(existing.get("state") or {}), "current_phase": "failed", "error": str(e)},
+            "state": failed_state,
             "completed_at": now_iso,
         }
+        # Persist failure to DB
+        await _persist_state(portfolio_id, failed_state, "failed")

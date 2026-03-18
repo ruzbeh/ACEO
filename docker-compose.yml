@@ -1,20 +1,38 @@
+# AECO - Agentic Engineering Company OS
+# Usage: docker compose up
+# Dashboard: http://localhost:8100/dashboard
+# API:       http://localhost:8100/api
+
 services:
+  # PostgreSQL database
   postgres:
     image: postgres:16-alpine
     environment:
+      POSTGRES_DB: aeco
       POSTGRES_USER: aeco
       POSTGRES_PASSWORD: aeco
-      POSTGRES_DB: aeco
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aeco"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
+  # Redis (event bus, caching)
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
+  # Chroma (vector store)
   chroma:
     image: chromadb/chroma:latest
     ports:
@@ -22,6 +40,49 @@ services:
     volumes:
       - chromadata:/chroma/chroma
 
+  # AECO server + dashboard
+  aeco:
+    build: .
+    ports:
+      - "8100:8100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aeco:aeco@postgres:5432/aeco
+      REDIS_URL: redis://redis:6379/0
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      WORKSPACE_PATH: /app/workspace
+      LOG_LEVEL: INFO
+      LOG_PATH: /app/logs/aeco.log
+      COMPANY_LOG_PATH: /app/logs/company.log
+      COMPANY_LOG_CONSOLE: "true"
+      CORS_ORIGINS: "http://localhost:8100,http://localhost:5173"
+      # LLM keys — set in .env or pass via environment
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Optional integrations
+      FACEBOOK_ACCESS_TOKEN: ${FACEBOOK_ACCESS_TOKEN:-}
+      FACEBOOK_AD_ACCOUNT_ID: ${FACEBOOK_AD_ACCOUNT_ID:-}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_RECIPIENT_NUMBER: ${WHATSAPP_RECIPIENT_NUMBER:-}
+    volumes:
+      - ./workspace:/app/workspace
+      - aeco-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
 volumes:
   pgdata:
   chromadata:
+  aeco-logs:

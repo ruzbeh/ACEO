@@ -1,0 +1,16 @@
+.git
+.env
+*.db
+*.pyc
+__pycache__
+.pytest_cache
+.mypy_cache
+node_modules
+dashboard/node_modules
+dashboard/dist
+logs/
+workspace/
+chroma_data/
+.venv
+venv
+*.egg-info

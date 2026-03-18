@@ -97,11 +97,34 @@ async def _mark_stale_runs_failed() -> None:
             logger.info("Marked %s stale workflow run(s) as failed (server restarted)", len(runs))
 
 
+async def _mark_stale_portfolios_failed() -> None:
+    """Mark any portfolio cycles still 'running' as failed (e.g. after server restart)."""
+    try:
+        from sqlalchemy import select
+        from aeco.models.portfolio_cycle import PortfolioCycle
+        from datetime import datetime, timezone
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(PortfolioCycle).where(PortfolioCycle.status == "running")
+            )
+            cycles = result.scalars().all()
+            for c in cycles:
+                c.status = "failed"
+                c.current_phase = "failed"
+                c.completed_at = datetime.now(timezone.utc)
+            if cycles:
+                await session.commit()
+                logger.info("Marked %s stale portfolio cycle(s) as failed (server restarted)", len(cycles))
+    except Exception as e:
+        logger.debug(f"Stale portfolio cleanup skipped: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize the system on startup."""
     logger.info("Starting AECO...")
     await _mark_stale_runs_failed()
+    await _mark_stale_portfolios_failed()
 
     # Register tools and load agent definitions
     register_all_tools(tool_gateway)
@@ -224,5 +247,6 @@ async def root():
 
 
 @app.get("/health")
+@app.get("/api/health")
 async def health():
     return {"status": "ok", "version": "0.1.0"}
