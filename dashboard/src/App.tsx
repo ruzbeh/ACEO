@@ -6,12 +6,14 @@ import { TasksPage } from './pages/TasksPage';
 import { TaskDetailPage } from './pages/TaskDetailPage';
 import { BudgetPage } from './pages/BudgetPage';
 import { AgentsPage } from './pages/AgentsPage';
+import { CompanyPage } from './pages/CompanyPage';
 
 export default function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route index element={<Navigate to="/initiatives" replace />} />
+        <Route index element={<Navigate to="/company" replace />} />
+        <Route path="company" element={<CompanyPage />} />
         <Route path="initiatives" element={<InitiativesPage />} />
         <Route path="initiatives/:id" element={<InitiativeDetailPage />} />
         <Route path="tasks" element={<TasksPage />} />
