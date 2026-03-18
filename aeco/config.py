@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # Stripe API
     stripe_api_key: Optional[str] = None
 
+    # WhatsApp Business API (uses Meta Cloud API)
+    whatsapp_token: Optional[str] = None
+    whatsapp_phone_number_id: str = ""
+    whatsapp_recipient_number: str = ""  # Your phone number in international format (e.g. 14155551234)
+
     # App
     workspace_path: str = "./workspace"
     log_level: str = "INFO"

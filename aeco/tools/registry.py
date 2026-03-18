@@ -30,6 +30,12 @@ from aeco.tools.stripe_tools import (
     stripe_get_mrr,
     stripe_get_revenue,
 )
+from aeco.tools.whatsapp_tools import (
+    whatsapp_send_alert,
+    whatsapp_send_approval_request,
+    whatsapp_send_message,
+    whatsapp_send_portfolio_update,
+)
 
 
 def register_all_tools(gateway: ToolGateway) -> None:
@@ -55,6 +61,11 @@ def register_all_tools(gateway: ToolGateway) -> None:
     gateway.register("stripe_get_revenue", stripe_get_revenue, {"stripe:read"})
     gateway.register("stripe_get_churn", stripe_get_churn, {"stripe:read"})
     gateway.register("stripe_get_customers", stripe_get_customers, {"stripe:read"})
+    # WhatsApp
+    gateway.register("whatsapp_send_message", whatsapp_send_message, {"whatsapp:send"})
+    gateway.register("whatsapp_send_approval_request", whatsapp_send_approval_request, {"whatsapp:send"})
+    gateway.register("whatsapp_send_portfolio_update", whatsapp_send_portfolio_update, {"whatsapp:send"})
+    gateway.register("whatsapp_send_alert", whatsapp_send_alert, {"whatsapp:send"})
 
 
 def get_langchain_tools(

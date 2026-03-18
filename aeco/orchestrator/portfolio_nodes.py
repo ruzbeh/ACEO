@@ -29,6 +29,10 @@ from aeco.events import (
 )
 from aeco.memory.decision_ledger import DecisionLedgerStore
 from aeco.orchestrator.portfolio_state import PortfolioState
+from aeco.tools.whatsapp_tools import (
+    whatsapp_send_alert,
+    whatsapp_send_portfolio_update,
+)
 
 if TYPE_CHECKING:
     from aeco.budget.engine import BudgetEngine
@@ -184,6 +188,19 @@ class PortfolioNodes:
             "killed": len(killed),
             "scaled": len(scaled),
         })
+
+        # WhatsApp notification: CEO decisions
+        try:
+            await whatsapp_send_portfolio_update(
+                phase="CEO Decisions Made",
+                cycle=state.get("cycle_count", 0),
+                opportunities=len(state.get("opportunities", [])),
+                funded=len(funded),
+                killed=len(killed),
+                budget_spent=state.get("budget_spent", 0),
+            )
+        except Exception as e:
+            logger.debug(f"WhatsApp notification skipped: {e}")
 
         return {
             "funded_initiatives": funded,
@@ -504,6 +521,24 @@ class PortfolioNodes:
             "budget_spent": spent,
             "results_count": len(results),
         })
+
+        # WhatsApp notification: portfolio complete
+        completed = [r for r in results if r.get("action") == "completed"]
+        scaled = [r for r in completed if r.get("verdict") == "scale"]
+        try:
+            await whatsapp_send_alert(
+                alert_type="Portfolio Complete",
+                severity="info",
+                message=(
+                    f"Finished {cycles} cycle(s)\n"
+                    f"Budget spent: ${spent:.2f}\n"
+                    f"Initiatives run: {len(results)}\n"
+                    f"Scaled: {len(scaled)}\n"
+                    f"Goals: {', '.join(state.get('company_goals', []))}"
+                ),
+            )
+        except Exception as e:
+            logger.debug(f"WhatsApp notification skipped: {e}")
 
         return {
             "current_phase": "closed",
