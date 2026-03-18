@@ -39,11 +39,11 @@ class TestSecurityReviewerRegistration:
         assert agent.role == "security"
         assert "workspace:read" in agent.permissions
 
-    def test_total_agent_count_is_17(self):
+    def test_total_agent_count_is_19(self):
         from pathlib import Path
         reg = AgentRegistry()
         reg.load_from_yaml(Path("aeco/agents/definitions/v1_agents.yaml"))
-        assert len(reg.list_agents()) == 17
+        assert len(reg.list_agents()) == 19
 
 
 # --- Initiative graph compilation test ---

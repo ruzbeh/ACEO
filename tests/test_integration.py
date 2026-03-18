@@ -224,7 +224,7 @@ class TestAgentRegistryCompleteness:
         registry = AgentRegistry()
         registry.load_from_yaml("aeco/agents/definitions/v1_agents.yaml")
         agents = registry.list_agents()
-        assert len(agents) == 17, f"Expected 17 agents, got {len(agents)}"
+        assert len(agents) == 19, f"Expected 19 agents, got {len(agents)}"
 
 
 # ---------------------------------------------------------------------------

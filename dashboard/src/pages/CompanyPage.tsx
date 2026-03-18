@@ -21,6 +21,7 @@ import {
   LayoutDashboard,
   Users,
   Briefcase,
+  AlertTriangle,
 } from 'lucide-react';
 import type { AgentResponse } from '../api/types';
 import { cn } from '../lib/utils';
@@ -64,16 +65,16 @@ const ORG_STRUCTURE = {
     color: 'border-red-500/40 bg-red-500/5',
     badgeColor: 'bg-red-500/20 text-red-400',
     icon: Shield,
-    agents: ['qa_engineer', 'security_reviewer'],
-    description: 'Code review, testing, OWASP assessment, blast-radius analysis',
+    agents: ['qa_engineer', 'security_reviewer', 'incident_investigator'],
+    description: 'Code review, testing, OWASP assessment, blast-radius analysis, incident investigation',
   },
   operations: {
     label: 'Operations & Analytics',
     color: 'border-cyan-500/40 bg-cyan-500/5',
     badgeColor: 'bg-cyan-500/20 text-cyan-400',
     icon: BarChart3,
-    agents: ['analytics_agent', 'budget_controller', 'agent_evaluator', 'release_manager', 'postmortem_writer'],
-    description: 'Metrics, budget governance, evaluation, release, retrospectives',
+    agents: ['analytics_agent', 'budget_controller', 'agent_evaluator', 'experiment_agent', 'release_manager', 'postmortem_writer'],
+    description: 'Metrics, budget governance, evaluation, experimentation, release, retrospectives',
   },
 } as const;
 
@@ -120,6 +121,8 @@ const AGENT_ICONS: Record<string, typeof Crown> = {
   analytics_agent: BarChart3,
   budget_controller: Wallet,
   agent_evaluator: Users,
+  incident_investigator: AlertTriangle,
+  experiment_agent: TestTube,
   release_manager: GitBranch,
   postmortem_writer: FileText,
 };

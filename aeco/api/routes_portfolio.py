@@ -123,6 +123,76 @@ async def list_portfolio_runs():
     ]
 
 
+# --- Approval Queue ---
+
+
+@router.get("/approvals")
+async def list_approvals():
+    """Get all pending approval requests."""
+    from aeco.db.session import async_session_factory
+    from aeco.models.approval import ApprovalRequest as ApprovalModel, ApprovalStatus
+    from sqlalchemy import select
+
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(ApprovalModel).order_by(ApprovalModel.created_at.desc())
+        )
+        approvals = result.scalars().all()
+        return [
+            {
+                "id": a.id,
+                "portfolio_id": a.portfolio_id,
+                "initiative_title": a.initiative_title,
+                "action": a.action,
+                "reasoning": a.reasoning,
+                "allocated_budget": a.allocated_budget,
+                "blast_radius": a.blast_radius,
+                "requested_by": a.requested_by,
+                "status": a.status,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in approvals
+        ]
+
+
+@router.post("/approvals/{approval_id}/approve")
+async def approve_request(approval_id: str):
+    """Approve a pending approval request."""
+    from datetime import datetime as dt, timezone as tz
+    from aeco.db.session import async_session_factory
+    from aeco.models.approval import ApprovalRequest as ApprovalModel, ApprovalStatus
+
+    async with async_session_factory() as session:
+        approval = await session.get(ApprovalModel, approval_id)
+        if not approval:
+            raise HTTPException(status_code=404, detail="Approval not found")
+        if approval.status != ApprovalStatus.PENDING.value:
+            raise HTTPException(status_code=400, detail=f"Already {approval.status}")
+        approval.status = ApprovalStatus.APPROVED.value
+        approval.reviewed_at = dt.now(tz.utc)
+        await session.commit()
+        return {"id": approval_id, "status": "approved"}
+
+
+@router.post("/approvals/{approval_id}/reject")
+async def reject_request(approval_id: str):
+    """Reject a pending approval request."""
+    from datetime import datetime as dt, timezone as tz
+    from aeco.db.session import async_session_factory
+    from aeco.models.approval import ApprovalRequest as ApprovalModel, ApprovalStatus
+
+    async with async_session_factory() as session:
+        approval = await session.get(ApprovalModel, approval_id)
+        if not approval:
+            raise HTTPException(status_code=404, detail="Approval not found")
+        if approval.status != ApprovalStatus.PENDING.value:
+            raise HTTPException(status_code=400, detail=f"Already {approval.status}")
+        approval.status = ApprovalStatus.REJECTED.value
+        approval.reviewed_at = dt.now(tz.utc)
+        await session.commit()
+        return {"id": approval_id, "status": "rejected"}
+
+
 # --- Internal ---
 
 

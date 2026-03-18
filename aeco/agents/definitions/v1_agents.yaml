@@ -482,3 +482,59 @@ agents:
       - agent_logs:read
       - budget:read
       - clickup:read
+
+  - agent_id: incident_investigator
+    name: Incident Investigator
+    role: investigator
+    system_prompt_path: aeco/agents/prompts/incident_investigator.md
+    executor: langchain
+    claude_code_config:
+      max_turns: 10
+      timeout_seconds: 300
+      allowed_tools:
+        - Read
+        - Glob
+        - Grep
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.2
+      max_tokens: 4096
+    tools:
+      - agent_logs_read
+      - metrics_read
+      - clickup_read_task
+      - clickup_create_comment
+    permissions:
+      - agent_logs:read
+      - metrics:read
+      - clickup:read
+      - clickup:comment
+
+  - agent_id: experiment_agent
+    name: Experiment Agent
+    role: experimentation
+    system_prompt_path: aeco/agents/prompts/experiment_agent.md
+    executor: langchain
+    claude_code_config:
+      max_turns: 10
+      timeout_seconds: 300
+      allowed_tools:
+        - Read
+        - Glob
+        - Grep
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.3
+      max_tokens: 4096
+    tools:
+      - metrics_read
+      - agent_logs_read
+      - clickup_read_task
+      - clickup_create_comment
+    permissions:
+      - metrics:read
+      - agent_logs:read
+      - clickup:read
+      - clickup:comment

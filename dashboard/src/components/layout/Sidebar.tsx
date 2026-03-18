@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom';
-import { Rocket, ListChecks, Wallet, Bot, Activity, Building2 } from 'lucide-react';
+import { Rocket, ListChecks, Wallet, Bot, Activity, Building2, Briefcase } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const links = [
   { to: '/company', label: 'Company', icon: Building2 },
+  { to: '/portfolio', label: 'Portfolio', icon: Briefcase },
   { to: '/initiatives', label: 'Initiatives', icon: Rocket },
   { to: '/tasks', label: 'Tasks', icon: ListChecks },
   { to: '/budget', label: 'Budget', icon: Wallet },

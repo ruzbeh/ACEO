@@ -7,6 +7,7 @@ import { TaskDetailPage } from './pages/TaskDetailPage';
 import { BudgetPage } from './pages/BudgetPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { CompanyPage } from './pages/CompanyPage';
+import { PortfolioPage } from './pages/PortfolioPage';
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
       <Route element={<AppShell />}>
         <Route index element={<Navigate to="/company" replace />} />
         <Route path="company" element={<CompanyPage />} />
+        <Route path="portfolio" element={<PortfolioPage />} />
         <Route path="initiatives" element={<InitiativesPage />} />
         <Route path="initiatives/:id" element={<InitiativeDetailPage />} />
         <Route path="tasks" element={<TasksPage />} />

@@ -177,6 +177,34 @@ export interface SpendDecision {
   optimization_hints: string[];
 }
 
+export interface InitiativeSpend {
+  initiative_id: string;
+  total_cost: number;
+  total_tokens: number;
+  by_agent: Record<string, { total: number; tokens: number; count: number }>;
+  records: Array<{
+    id: string;
+    agent_id: string;
+    amount: number;
+    tokens_used: number | null;
+    created_at: string;
+  }>;
+}
+
+export interface SpendOverTimeResponse {
+  budget_id: string;
+  group_by: string;
+  series: Array<{ date: string; amount: number }>;
+  total: number;
+}
+
+export interface SpendByInitiativeItem {
+  initiative_id: string;
+  total: number;
+  tokens: number;
+  count: number;
+}
+
 export interface OptimizationReport {
   budget_id: string;
   budget_name: string;
@@ -196,6 +224,54 @@ export interface WorkflowCost {
   total_cost: number;
   total_tokens: number;
   by_agent: Record<string, number>;
+}
+
+// ── Portfolio ──
+export interface PortfolioRunResponse {
+  portfolio_id: string;
+  status: string;
+  message: string;
+}
+
+export interface PortfolioStatusResponse {
+  portfolio_id: string;
+  current_phase: string;
+  cycle_count: number;
+  max_cycles: number;
+  budget_spent: number;
+  budget_remaining: number;
+  opportunities_found: number;
+  initiatives_funded: number;
+  initiatives_killed: number;
+  execution_results: number;
+  status: 'running' | 'completed' | 'failed';
+}
+
+export interface PortfolioListItem {
+  portfolio_id: string;
+  status: string;
+  current_phase: string;
+}
+
+export interface RunPortfolioRequest {
+  company_goals: string[];
+  max_cycles?: number;
+  total_budget?: number;
+  workspace_path?: string;
+}
+
+// ── Approval Queue ──
+export interface ApprovalRequest {
+  id: string;
+  portfolio_id: string | null;
+  initiative_title: string;
+  action: 'fund' | 'kill' | 'scale';
+  reasoning: string;
+  allocated_budget: number;
+  blast_radius: string;
+  requested_by: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
 }
 
 // ── Agents ──
