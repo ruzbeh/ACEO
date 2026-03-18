@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def parse_agent_response(content: str) -> dict[str, Any]:
@@ -14,7 +17,7 @@ def parse_agent_response(content: str) -> dict[str, Any]:
     2. ``` ... ``` code blocks (no language tag)
     3. Largest balanced { ... } JSON object in the text
     4. Entire text as JSON
-    5. Fallback: wrap raw text
+    5. Fallback: wrap raw text with parse_error flag + raw_response
     """
     text = content.strip()
 
@@ -80,5 +83,10 @@ def parse_agent_response(content: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
-    # Fallback
+    # Fallback — log the failure prominently so it doesn't go unnoticed
+    preview = text[:500].replace("\n", " ")
+    logger.warning(
+        f"[PARSE FAIL] Could not extract JSON from LLM response ({len(text)} chars). "
+        f"Preview: {preview}"
+    )
     return {"raw_response": content, "parse_error": True}

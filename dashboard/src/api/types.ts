@@ -258,9 +258,14 @@ export interface ExecutionResultItem {
 }
 
 export interface PortfolioMessage {
-  role: string;
+  sender?: string;
+  type?: string;
+  content?: unknown;
+  timestamp?: string;
+  // Legacy compat
+  role?: string;
   agent?: string;
-  content: unknown;
+  [key: string]: unknown;
 }
 
 export interface PortfolioStatusResponse {

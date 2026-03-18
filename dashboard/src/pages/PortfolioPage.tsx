@@ -40,7 +40,7 @@ import {
   useApprovalQueue,
   useApproveAction,
 } from '../api/portfolio';
-import type { PortfolioListItem, PortfolioStatusResponse } from '../api/types';
+import type { PortfolioListItem, PortfolioMessage, PortfolioStatusResponse } from '../api/types';
 
 const PHASE_COLORS: Record<string, string> = {
   opportunity_scan: 'bg-amber-500/20 text-amber-400',
@@ -484,20 +484,79 @@ function ResultsSection({ status }: { status: PortfolioStatusResponse }) {
 
 /* ─── Activity Log ─── */
 
+const MSG_TYPE_STYLES: Record<string, string> = {
+  phase_start: 'text-blue-400 font-semibold',
+  agent_call: 'text-cyan-400',
+  response: 'text-green-400',
+  opportunity: 'text-amber-400',
+  decisions: 'text-blue-300',
+  fund_decision: 'text-green-300',
+  parse_error: 'text-red-400',
+  error: 'text-red-400',
+  warning: 'text-amber-400',
+  info: 'text-gray-300',
+  initiative_start: 'text-purple-400',
+  initiative_complete: 'text-green-400',
+  initiative_killed: 'text-red-300',
+  timeout: 'text-amber-400',
+  portfolio_closed: 'text-blue-400 font-semibold',
+  rebalance: 'text-cyan-300',
+  evaluation_summary: 'text-purple-300',
+};
+
+function formatMsgContent(msg: PortfolioMessage): string {
+  const type = (msg.type as string) || '';
+  const content = msg.content;
+
+  if (typeof content === 'string') return content;
+  if (!content || typeof content !== 'object') return JSON.stringify(content);
+
+  const c = content as Record<string, unknown>;
+
+  // Specific formatting for known message types
+  if (type === 'phase_start') return `── Phase: ${(c.phase as string || '').replace(/_/g, ' ')} ──`;
+  if (type === 'agent_call') return c.action as string || `Calling ${c.agent}...`;
+  if (type === 'response') return `Found ${c.opportunities_found ?? 0} opportunities (confidence: ${c.confidence ?? 0})`;
+  if (type === 'opportunity') return `${c.index}. ${c.title} — ${c.goal || c.hypothesis || ''}`;
+  if (type === 'decisions') return `Fund: ${c.funded_count}, Kill: ${c.killed_count}, Scale: ${c.scaled_count} — ${(c.reasoning as string || '').slice(0, 150)}`;
+  if (type === 'fund_decision') return `Fund "${c.title}" — $${c.allocated_budget} (${c.priority}) ${(c.reasoning as string || '').slice(0, 100)}`;
+  if (type === 'parse_error') return `PARSE ERROR: ${(c.error as string || '').slice(0, 200)}`;
+  if (type === 'initiative_start') return `[${c.index}/${c.total}] Starting "${c.title}" — $${c.allocated_budget}`;
+  if (type === 'initiative_complete') return `"${c.title}" → ${c.verdict} (${c.tasks_executed} tasks, $${c.budget_spent})`;
+  if (type === 'portfolio_closed') return `Complete: ${c.cycles} cycles, $${(c.budget_spent as number || 0).toFixed(0)} spent, ${c.total_results} results`;
+  if (type === 'evaluation_summary') return `Executed: ${c.total_executed}, Scaled: ${c.scaled}, Killed: ${c.killed}, Failed: ${c.failed}`;
+  if (type === 'rebalance') return `Cycle ${c.cycle}/${c.max_cycles} — $${(c.budget_remaining as number || 0).toFixed(0)} remaining → ${c.next_phase}`;
+
+  // Fallback: show key/value pairs
+  const pairs = Object.entries(c).slice(0, 4).map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 80) : JSON.stringify(v)}`);
+  return pairs.join(' | ');
+}
+
 function ActivityLogSection({ status }: { status: PortfolioStatusResponse }) {
   if (status.messages.length === 0) return null;
   return (
-    <Collapsible title="Activity Log" icon={MessageSquare} count={status.messages.length}>
-      <div className="max-h-64 overflow-y-auto space-y-1 pr-1">
+    <Collapsible title="Activity Log" icon={MessageSquare} count={status.messages.length} defaultOpen={status.status === 'running'}>
+      <div className="max-h-80 overflow-y-auto space-y-0.5 pr-1 font-mono">
         {status.messages.map((msg, i) => {
-          const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-          const isSystem = msg.role === 'system';
+          const type = msg.type || '';
+          const sender = msg.sender || msg.role || '?';
+          const styleClass = MSG_TYPE_STYLES[type] || 'text-gray-400';
+          const isError = type === 'error' || type === 'parse_error';
+
           return (
-            <div key={i} className="flex gap-2 text-[11px] leading-relaxed">
-              <span className={cn('shrink-0 font-mono', isSystem ? 'text-gray-500' : 'text-accent')}>
-                {msg.agent || msg.role || '?'}
+            <div
+              key={i}
+              className={cn(
+                'flex gap-2 text-[11px] leading-relaxed py-0.5',
+                isError && 'bg-red-500/5 rounded px-1',
+              )}
+            >
+              <span className="shrink-0 text-gray-600 w-28 text-right truncate">
+                {sender}
               </span>
-              <span className="text-gray-400 truncate">{content.slice(0, 200)}</span>
+              <span className={cn('min-w-0', styleClass)}>
+                {formatMsgContent(msg)}
+              </span>
             </div>
           );
         })}

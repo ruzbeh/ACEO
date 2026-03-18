@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import traceback
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -49,6 +50,19 @@ def _msg(sender: str, msg_type: str, content: Any) -> dict:
     }
 
 
+def _check_parse_error(result: dict, agent_id: str) -> str | None:
+    """If the agent result has parse_error, return a human-readable error string."""
+    if result.get("parse_error"):
+        raw = result.get("raw_response", "")
+        preview = raw[:500] if raw else "(empty)"
+        return (
+            f"Agent '{agent_id}' returned a non-JSON response. "
+            f"The LLM output could not be parsed into the expected format. "
+            f"Raw response preview: {preview}"
+        )
+    return None
+
+
 class PortfolioNodes:
     """Node functions for portfolio-level orchestration."""
 
@@ -74,55 +88,127 @@ class PortfolioNodes:
 
     async def opportunity_scan(self, state: PortfolioState) -> dict:
         cycle = state.get("cycle_count", 0)
+        goals = state.get("company_goals", [])
+        budget_remaining = state.get("budget_remaining", 0)
+
         logger.info(f"Portfolio cycle {cycle}: scanning for opportunities")
+
+        messages = [
+            _msg("system", "phase_start", {
+                "phase": "opportunity_scan",
+                "cycle": cycle,
+                "goals": goals,
+                "budget_remaining": budget_remaining,
+            }),
+        ]
 
         await event_bus.emit(PORTFOLIO_CYCLE_STARTED, {
             "portfolio_id": state["portfolio_id"],
             "cycle": cycle,
         })
 
-        agent_def = self.registry.get("product_strategist")
-        runtime = create_executor(agent_def, self.audit)
+        result = {}
+        opportunities = []
+        parse_err = None
 
-        # Gather context for the strategist
-        recent_outcomes = []
-        for init in state.get("active_initiatives", []):
-            if init.get("verdict"):
-                recent_outcomes.append({
-                    "title": init.get("title"),
-                    "verdict": init.get("verdict"),
-                    "budget_spent": init.get("budget_spent", 0),
-                })
+        # Call the Product Strategist agent
+        try:
+            agent_def = self.registry.get("product_strategist")
+            runtime = create_executor(agent_def, self.audit)
 
-        context = {
-            "company_goals": state.get("company_goals", []),
-            "recent_outcomes": recent_outcomes,
-            "active_initiatives": state.get("active_initiatives", []),
-            "budget_remaining": state.get("budget_remaining", 0),
-            "cycle_count": cycle,
-            "past_opportunities": state.get("opportunities", [])[-10:],
-        }
+            recent_outcomes = []
+            for init in state.get("active_initiatives", []):
+                if init.get("verdict"):
+                    recent_outcomes.append({
+                        "title": init.get("title"),
+                        "verdict": init.get("verdict"),
+                        "budget_spent": init.get("budget_spent", 0),
+                    })
 
-        result = await runtime.execute(context)
+            context = {
+                "company_goals": goals,
+                "recent_outcomes": recent_outcomes,
+                "active_initiatives": state.get("active_initiatives", []),
+                "budget_remaining": budget_remaining,
+                "cycle_count": cycle,
+                "past_opportunities": state.get("opportunities", [])[-10:],
+            }
 
-        opportunities = result.get("opportunities", [])
-        logger.info(f"Product Strategist discovered {len(opportunities)} opportunities")
+            messages.append(_msg("system", "agent_call", {
+                "agent": "product_strategist",
+                "action": "Calling Product Strategist to discover opportunities...",
+                "context_keys": list(context.keys()),
+            }))
 
-        await self.ledger.record(
-            category="portfolio",
-            agent_id="product_strategist",
-            decision=result.get("decision", f"Discovered {len(opportunities)} opportunities"),
-            reasoning=json.dumps([o.get("title") for o in opportunities])[:500],
-            assumptions=result.get("assumptions", []),
-            risks=result.get("risks", []),
-            confidence=result.get("confidence", 0.0),
-        )
+            result = await runtime.execute(context)
+
+            # Check for parse errors
+            parse_err = _check_parse_error(result, "product_strategist")
+            if parse_err:
+                logger.warning(parse_err)
+                messages.append(_msg("product_strategist", "parse_error", {
+                    "error": parse_err,
+                    "raw_preview": result.get("raw_response", "")[:500],
+                }))
+            else:
+                opportunities = result.get("opportunities", [])
+                messages.append(_msg("product_strategist", "response", {
+                    "opportunities_found": len(opportunities),
+                    "decision": result.get("decision", ""),
+                    "portfolio_gaps": result.get("portfolio_gaps", []),
+                    "confidence": result.get("confidence", 0),
+                }))
+
+            # Log each opportunity
+            for i, opp in enumerate(opportunities):
+                title = opp.get("title", f"Opportunity {i+1}")
+                messages.append(_msg("product_strategist", "opportunity", {
+                    "index": i + 1,
+                    "title": title,
+                    "goal": opp.get("goal", ""),
+                    "hypothesis": opp.get("hypothesis", ""),
+                    "estimated_impact": opp.get("estimated_impact", ""),
+                    "confidence": opp.get("confidence", 0),
+                    "category": opp.get("category", ""),
+                }))
+
+            logger.info(f"Product Strategist discovered {len(opportunities)} opportunities")
+
+        except Exception as e:
+            err_msg = f"Product Strategist failed: {e}"
+            logger.error(err_msg, exc_info=True)
+            messages.append(_msg("product_strategist", "error", {
+                "error": err_msg,
+                "traceback": traceback.format_exc()[:500],
+            }))
+
+        # Record in decision ledger
+        try:
+            await self.ledger.record(
+                category="portfolio",
+                agent_id="product_strategist",
+                decision=result.get("decision", f"Discovered {len(opportunities)} opportunities"),
+                reasoning=json.dumps([o.get("title") for o in opportunities])[:500],
+                assumptions=result.get("assumptions", []),
+                risks=result.get("risks", []),
+                confidence=result.get("confidence", 0.0),
+            )
+        except Exception:
+            pass
 
         await event_bus.emit(PORTFOLIO_OPPORTUNITIES_DISCOVERED, {
             "portfolio_id": state["portfolio_id"],
             "count": len(opportunities),
             "titles": [o.get("title", "") for o in opportunities],
         })
+
+        errors = []
+        if not opportunities:
+            err = "No opportunities discovered — the Product Strategist returned empty results."
+            if parse_err:
+                err += " (Parse error: LLM response was not valid JSON)"
+            errors.append(err)
+            messages.append(_msg("system", "warning", err))
 
         return {
             "opportunities": opportunities,
@@ -133,10 +219,8 @@ class PortfolioNodes:
                 "decision": result.get("decision", ""),
                 "opportunity_count": len(opportunities),
             }],
-            "messages": [_msg("product_strategist", "opportunities", {
-                "count": len(opportunities),
-                "opportunities": opportunities,
-            })],
+            "messages": messages,
+            "errors": errors,
         }
 
     # ------------------------------------------------------------------
@@ -144,43 +228,102 @@ class PortfolioNodes:
     # ------------------------------------------------------------------
 
     async def portfolio_review(self, state: PortfolioState) -> dict:
-        logger.info("CEO: reviewing portfolio and opportunities")
+        opportunities = state.get("opportunities", [])
+        budget_remaining = state.get("budget_remaining", 0)
 
-        agent_def = self.registry.get("ceo_director")
-        runtime = create_executor(agent_def, self.audit)
+        logger.info(f"CEO: reviewing {len(opportunities)} opportunities, ${budget_remaining:.2f} remaining")
 
-        context = {
-            "company_goals": state.get("company_goals", []),
-            "active_initiatives": state.get("active_initiatives", []),
-            "opportunities": state.get("opportunities", [])[-10:],
-            "budget_state": {
-                "total": state.get("total_budget", 0),
-                "spent": state.get("budget_spent", 0),
-                "remaining": state.get("budget_remaining", 0),
-            },
-            "past_decisions": state.get("portfolio_decisions", [])[-5:],
-            "cycle_count": state.get("cycle_count", 0),
-        }
+        messages = [
+            _msg("system", "phase_start", {
+                "phase": "portfolio_review",
+                "opportunities_count": len(opportunities),
+                "budget_remaining": budget_remaining,
+            }),
+        ]
 
-        result = await runtime.execute(context)
+        funded = []
+        killed = []
+        scaled = []
+        result = {}
 
-        funded = result.get("fund", [])
-        killed = result.get("kill", [])
-        scaled = result.get("scale", [])
+        try:
+            agent_def = self.registry.get("ceo_director")
+            runtime = create_executor(agent_def, self.audit)
 
-        logger.info(
-            f"CEO decisions: fund {len(funded)}, kill {len(killed)}, scale {len(scaled)}"
-        )
+            context = {
+                "company_goals": state.get("company_goals", []),
+                "active_initiatives": state.get("active_initiatives", []),
+                "opportunities": opportunities[-10:],
+                "budget_state": {
+                    "total": state.get("total_budget", 0),
+                    "spent": state.get("budget_spent", 0),
+                    "remaining": budget_remaining,
+                },
+                "past_decisions": state.get("portfolio_decisions", [])[-5:],
+                "cycle_count": state.get("cycle_count", 0),
+            }
 
-        await self.ledger.record(
-            category="portfolio",
-            agent_id="ceo_director",
-            decision=result.get("decision", f"Fund {len(funded)}, kill {len(killed)}"),
-            reasoning=result.get("reasoning", ""),
-            assumptions=result.get("assumptions", []),
-            risks=result.get("risks", []),
-            confidence=result.get("confidence", 0.0),
-        )
+            messages.append(_msg("system", "agent_call", {
+                "agent": "ceo_director",
+                "action": f"CEO reviewing {len(opportunities)} opportunities with ${budget_remaining:.2f} budget...",
+            }))
+
+            result = await runtime.execute(context)
+
+            # Check for parse errors
+            parse_err = _check_parse_error(result, "ceo_director")
+            if parse_err:
+                logger.warning(parse_err)
+                messages.append(_msg("ceo_director", "parse_error", {
+                    "error": parse_err,
+                    "raw_preview": result.get("raw_response", "")[:500],
+                }))
+            else:
+                funded = result.get("fund", [])
+                killed = result.get("kill", [])
+                scaled = result.get("scale", [])
+
+                messages.append(_msg("ceo_director", "decisions", {
+                    "funded_count": len(funded),
+                    "killed_count": len(killed),
+                    "scaled_count": len(scaled),
+                    "reasoning": result.get("reasoning", ""),
+                    "decision": result.get("decision", ""),
+                    "confidence": result.get("confidence", 0),
+                }))
+
+                # Log each funding decision
+                for f in funded:
+                    messages.append(_msg("ceo_director", "fund_decision", {
+                        "title": f.get("title", "?"),
+                        "allocated_budget": f.get("allocated_budget", 0),
+                        "priority": f.get("priority", ""),
+                        "reasoning": f.get("reasoning", ""),
+                    }))
+
+            logger.info(f"CEO decisions: fund {len(funded)}, kill {len(killed)}, scale {len(scaled)}")
+
+        except Exception as e:
+            err_msg = f"CEO review failed: {e}"
+            logger.error(err_msg, exc_info=True)
+            messages.append(_msg("ceo_director", "error", {
+                "error": err_msg,
+                "traceback": traceback.format_exc()[:500],
+            }))
+
+        # Record in decision ledger
+        try:
+            await self.ledger.record(
+                category="portfolio",
+                agent_id="ceo_director",
+                decision=result.get("decision", f"Fund {len(funded)}, kill {len(killed)}"),
+                reasoning=result.get("reasoning", ""),
+                assumptions=result.get("assumptions", []),
+                risks=result.get("risks", []),
+                confidence=result.get("confidence", 0.0),
+            )
+        except Exception:
+            pass
 
         await event_bus.emit(PORTFOLIO_DECISIONS_MADE, {
             "portfolio_id": state["portfolio_id"],
@@ -194,13 +337,21 @@ class PortfolioNodes:
             await whatsapp_send_portfolio_update(
                 phase="CEO Decisions Made",
                 cycle=state.get("cycle_count", 0),
-                opportunities=len(state.get("opportunities", [])),
+                opportunities=len(opportunities),
                 funded=len(funded),
                 killed=len(killed),
                 budget_spent=state.get("budget_spent", 0),
             )
         except Exception as e:
             logger.debug(f"WhatsApp notification skipped: {e}")
+
+        errors = []
+        if not funded and not killed and not scaled:
+            err = "CEO made no decisions — no initiatives funded, killed, or scaled."
+            if result.get("parse_error"):
+                err += " (LLM response was not valid JSON)"
+            errors.append(err)
+            messages.append(_msg("system", "warning", err))
 
         return {
             "funded_initiatives": funded,
@@ -214,7 +365,8 @@ class PortfolioNodes:
                 "scaled": scaled,
                 "reasoning": result.get("reasoning", ""),
             }],
-            "messages": [_msg("ceo_director", "portfolio_decision", result)],
+            "messages": messages,
+            "errors": errors,
         }
 
     # ------------------------------------------------------------------
@@ -228,6 +380,18 @@ class PortfolioNodes:
         workspace_path = state.get("workspace_path", settings.workspace_path)
 
         logger.info(f"Executing portfolio: {len(funded)} to fund, {len(killed)} to kill")
+
+        messages = [
+            _msg("system", "phase_start", {
+                "phase": "executing",
+                "funded_count": len(funded),
+                "killed_count": len(killed),
+                "workspace": workspace_path,
+            }),
+        ]
+
+        if not funded and not killed:
+            messages.append(_msg("system", "info", "Nothing to execute — no initiatives were funded or killed."))
 
         await event_bus.emit(PORTFOLIO_EXECUTION_STARTED, {
             "portfolio_id": state["portfolio_id"],
@@ -254,15 +418,28 @@ class PortfolioNodes:
                             "action": "killed",
                             "initiative_id": init_id,
                         })
+                        messages.append(_msg("system", "initiative_killed", {
+                            "title": initiative.title,
+                            "id": init_id,
+                        }))
             except Exception as e:
                 logger.warning(f"Failed to kill initiative {init_id}: {e}")
+                messages.append(_msg("system", "error", f"Failed to kill initiative {init_id}: {e}"))
 
         # Run funded initiatives
-        for funded_init in funded:
+        for idx, funded_init in enumerate(funded):
             title = funded_init.get("title", "Untitled")
             goal = funded_init.get("goal", "")
             hypothesis = funded_init.get("hypothesis", "")
             allocated = funded_init.get("allocated_budget", 0)
+
+            messages.append(_msg("system", "initiative_start", {
+                "index": idx + 1,
+                "total": len(funded),
+                "title": title,
+                "goal": goal,
+                "allocated_budget": allocated,
+            }))
 
             if not self.initiative_graph:
                 logger.warning("No initiative graph available; skipping execution")
@@ -271,6 +448,7 @@ class PortfolioNodes:
                     "action": "skipped",
                     "reason": "No initiative graph",
                 })
+                messages.append(_msg("system", "warning", f"Skipped '{title}': no initiative graph available"))
                 continue
 
             # Create initiative in DB
@@ -287,9 +465,14 @@ class PortfolioNodes:
                     await session.commit()
                     await session.refresh(initiative)
                     init_id = str(initiative.id)
+                    messages.append(_msg("system", "initiative_created", {
+                        "id": init_id,
+                        "title": title,
+                    }))
             except Exception as e:
                 logger.error(f"Failed to create initiative '{title}': {e}")
                 results.append({"title": title, "action": "failed", "error": str(e)})
+                messages.append(_msg("system", "error", f"Failed to create initiative '{title}': {e}"))
                 continue
 
             # Build initial state for initiative graph
@@ -325,7 +508,9 @@ class PortfolioNodes:
             timeout = getattr(settings, "initiative_task_timeout_seconds", 600) * 3
 
             try:
-                logger.info(f"Running initiative: {title}")
+                logger.info(f"Running initiative [{idx+1}/{len(funded)}]: {title}")
+                messages.append(_msg("system", "info", f"Executing initiative '{title}'..."))
+
                 final_state = await asyncio.wait_for(
                     self.initiative_graph.ainvoke(init_state),
                     timeout=timeout,
@@ -334,8 +519,23 @@ class PortfolioNodes:
                 verdict = final_state.get("verdict", "kill")
                 budget_used = final_state.get("budget_spent", 0)
 
+                # Collect sub-messages from initiative
+                init_messages = final_state.get("messages", [])
+                for m in init_messages[-10:]:
+                    messages.append(_msg(
+                        m.get("sender", "initiative"),
+                        f"initiative:{m.get('type', 'info')}",
+                        m.get("content", ""),
+                    ))
+
+                # Collect sub-errors
+                init_errors = final_state.get("errors", [])
+                for e in init_errors:
+                    messages.append(_msg("initiative", "error", f"[{title}] {e}"))
+
                 # Update DB
                 from aeco.models.initiative import Initiative, InitiativeStatus
+                from aeco.db.session import async_session_factory
                 async with async_session_factory() as session:
                     db_init = await session.get(Initiative, uuid.UUID(init_id))
                     if db_init and db_init.status != InitiativeStatus.CLOSED.value:
@@ -352,6 +552,13 @@ class PortfolioNodes:
                     "budget_spent": budget_used,
                     "tasks_executed": len(final_state.get("execution_results", [])),
                 })
+
+                messages.append(_msg("system", "initiative_complete", {
+                    "title": title,
+                    "verdict": verdict,
+                    "budget_spent": budget_used,
+                    "tasks_executed": len(final_state.get("execution_results", [])),
+                }))
                 logger.info(f"Initiative '{title}' completed: verdict={verdict}")
 
             except asyncio.TimeoutError:
@@ -361,6 +568,7 @@ class PortfolioNodes:
                     "initiative_id": init_id,
                     "action": "timeout",
                 })
+                messages.append(_msg("system", "timeout", f"Initiative '{title}' timed out after {timeout}s"))
             except Exception as e:
                 logger.error(f"Initiative '{title}' failed: {e}")
                 results.append({
@@ -369,6 +577,11 @@ class PortfolioNodes:
                     "action": "failed",
                     "error": str(e),
                 })
+                messages.append(_msg("system", "error", {
+                    "title": title,
+                    "error": str(e),
+                    "traceback": traceback.format_exc()[:500],
+                }))
 
         total_spent = sum(r.get("budget_spent", 0) for r in results)
 
@@ -378,15 +591,18 @@ class PortfolioNodes:
             "total_spent": total_spent,
         })
 
+        messages.append(_msg("system", "phase_complete", {
+            "phase": "executing",
+            "results_count": len(results),
+            "total_spent": total_spent,
+        }))
+
         return {
             "execution_results": results,
             "budget_spent": state.get("budget_spent", 0) + total_spent,
             "budget_remaining": state.get("budget_remaining", 0) - total_spent,
             "current_phase": "evaluating",
-            "messages": [_msg("system", "execution_complete", {
-                "results": len(results),
-                "budget_spent": total_spent,
-            })],
+            "messages": messages,
         }
 
     # ------------------------------------------------------------------
@@ -401,6 +617,7 @@ class PortfolioNodes:
         scaled = [r for r in completed if r.get("verdict") == "scale"]
         killed_results = [r for r in completed if r.get("verdict") == "kill"]
         iterated = [r for r in completed if r.get("verdict") == "iterate"]
+        failed = [r for r in results if r.get("action") in ("failed", "timeout")]
 
         summary = {
             "total_executed": len(results),
@@ -408,21 +625,38 @@ class PortfolioNodes:
             "scaled": len(scaled),
             "killed": len(killed_results),
             "iterated": len(iterated),
-            "failed": len([r for r in results if r.get("action") in ("failed", "timeout")]),
+            "failed": len(failed),
             "total_budget_spent": state.get("budget_spent", 0),
             "budget_remaining": state.get("budget_remaining", 0),
             "success_rate": len(scaled) / max(len(completed), 1),
         }
 
-        await self.ledger.record(
-            category="portfolio",
-            agent_id="system",
-            decision=f"Portfolio evaluation: {summary['scaled']} scaled, {summary['killed']} killed",
-            reasoning=json.dumps(summary),
-            assumptions=[],
-            risks=[],
-            confidence=1.0,
-        )
+        messages = [
+            _msg("system", "phase_start", {"phase": "evaluating"}),
+            _msg("system", "evaluation_summary", summary),
+        ]
+
+        # Log each result
+        for r in results:
+            messages.append(_msg("system", "result_detail", {
+                "title": r.get("title", "?"),
+                "action": r.get("action", "?"),
+                "verdict": r.get("verdict", ""),
+                "budget_spent": r.get("budget_spent", 0),
+            }))
+
+        try:
+            await self.ledger.record(
+                category="portfolio",
+                agent_id="system",
+                decision=f"Portfolio evaluation: {summary['scaled']} scaled, {summary['killed']} killed",
+                reasoning=json.dumps(summary),
+                assumptions=[],
+                risks=[],
+                confidence=1.0,
+            )
+        except Exception:
+            pass
 
         await event_bus.emit(PORTFOLIO_EVALUATED, {
             "portfolio_id": state["portfolio_id"],
@@ -436,7 +670,7 @@ class PortfolioNodes:
                 "phase": "portfolio_evaluate",
                 "summary": summary,
             }],
-            "messages": [_msg("system", "portfolio_evaluation", summary)],
+            "messages": messages,
         }
 
     # ------------------------------------------------------------------
@@ -456,6 +690,22 @@ class PortfolioNodes:
             f"budget remaining ${budget_remaining:.2f}, "
             f"next={next_phase}"
         )
+
+        messages = [
+            _msg("system", "rebalance", {
+                "cycle": cycle,
+                "max_cycles": max_cycles,
+                "budget_remaining": budget_remaining,
+                "should_continue": should_continue,
+                "next_phase": next_phase,
+            }),
+        ]
+
+        if should_continue:
+            messages.append(_msg("system", "info", f"Continuing to cycle {cycle + 1} — ${budget_remaining:.2f} remaining"))
+        else:
+            reason = "max cycles reached" if cycle >= max_cycles else "budget exhausted"
+            messages.append(_msg("system", "info", f"Portfolio loop ending: {reason}"))
 
         # Refresh active initiatives from DB for next cycle
         active = []
@@ -493,12 +743,7 @@ class PortfolioNodes:
             "active_initiatives": active if active else state.get("active_initiatives", []),
             "funded_initiatives": [],
             "killed_initiatives": [],
-            "messages": [_msg("system", "rebalance", {
-                "cycle": cycle,
-                "max_cycles": max_cycles,
-                "next": next_phase,
-                "budget_remaining": budget_remaining,
-            })],
+            "messages": messages,
         }
 
     # ------------------------------------------------------------------
@@ -509,11 +754,39 @@ class PortfolioNodes:
         cycles = state.get("cycle_count", 0)
         spent = state.get("budget_spent", 0)
         results = state.get("execution_results", [])
+        goals = state.get("company_goals", [])
 
         logger.info(
             f"Portfolio closed: {cycles} cycles, ${spent:.2f} spent, "
             f"{len(results)} initiative results"
         )
+
+        messages = [
+            _msg("system", "phase_start", {"phase": "closed"}),
+            _msg("system", "portfolio_closed", {
+                "cycles": cycles,
+                "budget_spent": spent,
+                "budget_remaining": state.get("budget_remaining", 0),
+                "total_results": len(results),
+                "goals": goals,
+            }),
+        ]
+
+        # Summarize each result
+        for r in results:
+            messages.append(_msg("system", "final_result", {
+                "title": r.get("title", "?"),
+                "action": r.get("action", "?"),
+                "verdict": r.get("verdict", ""),
+            }))
+
+        # Collect all errors
+        all_errors = state.get("errors", [])
+        if all_errors:
+            messages.append(_msg("system", "errors_summary", {
+                "count": len(all_errors),
+                "errors": all_errors,
+            }))
 
         await event_bus.emit(PORTFOLIO_CLOSED, {
             "portfolio_id": state["portfolio_id"],
@@ -534,7 +807,7 @@ class PortfolioNodes:
                     f"Budget spent: ${spent:.2f}\n"
                     f"Initiatives run: {len(results)}\n"
                     f"Scaled: {len(scaled)}\n"
-                    f"Goals: {', '.join(state.get('company_goals', []))}"
+                    f"Goals: {', '.join(goals)}"
                 ),
             )
         except Exception as e:
@@ -542,9 +815,5 @@ class PortfolioNodes:
 
         return {
             "current_phase": "closed",
-            "messages": [_msg("system", "portfolio_closed", {
-                "cycles": cycles,
-                "budget_spent": spent,
-                "results": len(results),
-            })],
+            "messages": messages,
         }

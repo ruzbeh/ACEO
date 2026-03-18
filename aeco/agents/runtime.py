@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -54,9 +55,11 @@ class AgentRuntime:
             SystemMessage(content=self._system_prompt),
             HumanMessage(
                 content=f"Here is the current task context:\n\n{context_str}\n\n"
-                "Please analyze this and provide your response as a JSON object "
-                "according to your output format specification. You may use the provided tools "
-                "if they help (e.g. read/write files, run code, update ClickUp). When done, reply with the final JSON only."
+                "IMPORTANT: You MUST respond with a valid JSON object wrapped in ```json ... ``` markers. "
+                "Follow the exact output format specified in your system prompt. "
+                "Do NOT include any text outside the JSON block. "
+                "You may use the provided tools if they help (e.g. read/write files, run code, update ClickUp). "
+                "When done, reply with ONLY the ```json ... ``` block containing your response."
             ),
         ]
 
@@ -117,7 +120,17 @@ class AgentRuntime:
             if response is None:
                 response = await self.provider.invoke(messages)
             duration_ms = int((time.monotonic() - start_time) * 1000)
-            result = self._parse_response(response.content if hasattr(response, "content") else str(response))
+            raw_content = response.content if hasattr(response, "content") else str(response)
+            result = self._parse_response(raw_content)
+
+            # If parse failed, log it prominently and include the raw response
+            if result.get("parse_error"):
+                import logging as _log
+                _logger = _log.getLogger(__name__)
+                _logger.warning(
+                    f"[{self.agent_def.agent_id}] LLM response did not parse as JSON. "
+                    f"Raw ({len(raw_content)} chars): {raw_content[:300]}"
+                )
             um = getattr(response, "usage_metadata", None)
             tokens = um.get("total_tokens") if isinstance(um, dict) else getattr(um, "total_tokens", None)
 
@@ -133,11 +146,32 @@ class AgentRuntime:
 
             # Audit log
             if self.audit_logger:
+                _run_id = run_id
+                _task_id = task_id
+                _init_id = context.get("initiative_id")
+                if isinstance(_run_id, str) and _run_id:
+                    try:
+                        _run_id = uuid.UUID(_run_id)
+                    except ValueError:
+                        _run_id = None
+                if isinstance(_task_id, str) and _task_id:
+                    try:
+                        _task_id = uuid.UUID(_task_id)
+                    except ValueError:
+                        _task_id = None
+                if isinstance(_init_id, str) and _init_id:
+                    try:
+                        _init_id = uuid.UUID(_init_id)
+                    except ValueError:
+                        _init_id = None
                 await self.audit_logger.log(
                     agent_id=self.agent_def.agent_id,
                     action="llm_call",
                     input_summary=context_str[:500],
                     output_summary=str(result)[:500],
+                    workflow_run_id=_run_id,
+                    task_id=_task_id,
+                    initiative_id=_init_id,
                     llm_provider=self.agent_def.llm_config.provider,
                     llm_model=self.agent_def.llm_config.model,
                     tokens_used=tokens,
