@@ -233,6 +233,36 @@ export interface PortfolioRunResponse {
   message: string;
 }
 
+export interface OpportunityItem {
+  title: string;
+  description: string;
+  estimated_impact: string;
+}
+
+export interface DecisionItem {
+  agent: string;
+  phase: string;
+  reasoning: string;
+  funded: string[];
+  killed: string[];
+  scaled: string[];
+}
+
+export interface ExecutionResultItem {
+  title: string;
+  initiative_id: string;
+  action: string;
+  verdict: string;
+  budget_spent: number;
+  tasks_executed: number;
+}
+
+export interface PortfolioMessage {
+  role: string;
+  agent?: string;
+  content: unknown;
+}
+
 export interface PortfolioStatusResponse {
   portfolio_id: string;
   current_phase: string;
@@ -240,17 +270,28 @@ export interface PortfolioStatusResponse {
   max_cycles: number;
   budget_spent: number;
   budget_remaining: number;
+  total_budget: number;
   opportunities_found: number;
   initiatives_funded: number;
   initiatives_killed: number;
   execution_results: number;
   status: 'running' | 'completed' | 'failed';
+  company_goals: string[];
+  opportunities: OpportunityItem[];
+  portfolio_decisions: DecisionItem[];
+  results: ExecutionResultItem[];
+  errors: string[];
+  messages: PortfolioMessage[];
 }
 
 export interface PortfolioListItem {
   portfolio_id: string;
   status: string;
   current_phase: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  cycle_count?: number;
+  max_cycles?: number;
 }
 
 export interface RunPortfolioRequest {
