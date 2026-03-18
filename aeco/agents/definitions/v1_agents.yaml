@@ -110,11 +110,13 @@ agents:
       - clickup_read_task
       - clickup_create_comment
       - file_read
+      - file_write
       - code_execute
     permissions:
       - clickup:read
       - clickup:comment
       - workspace:read
+      - workspace:write
       - code:execute
 
   - agent_id: program_manager

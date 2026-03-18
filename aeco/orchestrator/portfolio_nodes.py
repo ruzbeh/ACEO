@@ -551,6 +551,16 @@ class PortfolioNodes:
                     "verdict": verdict,
                     "budget_spent": budget_used,
                     "tasks_executed": len(final_state.get("execution_results", [])),
+                    # Full initiative internals for rich UI
+                    "prd": final_state.get("prd"),
+                    "design_document": final_state.get("design_document"),
+                    "security_review": final_state.get("security_review"),
+                    "task_graph": final_state.get("task_graph", []),
+                    "execution_details": final_state.get("execution_results", []),
+                    "evaluation": final_state.get("evaluation"),
+                    "decisions": final_state.get("decisions", []),
+                    "north_star_metric": final_state.get("north_star_metric"),
+                    "success_threshold": final_state.get("success_threshold"),
                 })
 
                 messages.append(_msg("system", "initiative_complete", {

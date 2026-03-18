@@ -32,6 +32,7 @@ import { Input } from '../components/ui/Input';
 import { Spinner } from '../components/ui/Spinner';
 import { EmptyState } from '../components/ui/EmptyState';
 import { cn } from '../lib/utils';
+import { WORKSPACE_PRESETS } from '../lib/constants';
 import {
   usePortfolioRuns,
   usePortfolioStatus,
@@ -40,7 +41,7 @@ import {
   useApprovalQueue,
   useApproveAction,
 } from '../api/portfolio';
-import type { PortfolioListItem, PortfolioMessage, PortfolioStatusResponse } from '../api/types';
+import type { ExecutionResultItem, PortfolioListItem, PortfolioMessage, PortfolioStatusResponse } from '../api/types';
 
 const PHASE_COLORS: Record<string, string> = {
   opportunity_scan: 'bg-amber-500/20 text-amber-400',
@@ -76,7 +77,14 @@ function RunPortfolioForm() {
   const [goals, setGoals] = useState('');
   const [maxCycles, setMaxCycles] = useState('2');
   const [budget, setBudget] = useState('1000');
+  const [workspacePreset, setWorkspacePreset] = useState<string>('');
+  const [workspacePath, setWorkspacePath] = useState('');
   const runMutation = useRunPortfolio();
+
+  const effectiveWorkspacePath =
+    workspacePreset === 'custom'
+      ? workspacePath
+      : (WORKSPACE_PRESETS.find((w) => w.name === workspacePreset)?.path ?? workspacePath);
 
   const handleSubmit = () => {
     const goalList = goals.split('\n').map((g) => g.trim()).filter(Boolean);
@@ -85,6 +93,7 @@ function RunPortfolioForm() {
       company_goals: goalList,
       max_cycles: parseInt(maxCycles) || 2,
       total_budget: parseFloat(budget) || 0,
+      workspace_path: effectiveWorkspacePath?.trim() || undefined,
     });
     setGoals('');
   };
@@ -106,6 +115,29 @@ function RunPortfolioForm() {
             value={goals}
             onChange={(e) => setGoals(e.target.value)}
           />
+        </div>
+        <div>
+          <label className="text-[10px] font-medium uppercase text-gray-500">Workspace</label>
+          <p className="text-[10px] text-gray-500 mt-0.5">Project root where initiatives will run (path must exist on server).</p>
+          <select
+            value={workspacePreset}
+            onChange={(e) => setWorkspacePreset(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-gray-200 focus:border-accent focus:outline-none"
+          >
+            <option value="">Use server default</option>
+            {WORKSPACE_PRESETS.map((w) => (
+              <option key={w.name} value={w.name}>{w.name}</option>
+            ))}
+            <option value="custom">Custom path…</option>
+          </select>
+          {workspacePreset === 'custom' && (
+            <Input
+              className="mt-2"
+              value={workspacePath}
+              onChange={(e) => setWorkspacePath(e.target.value)}
+              placeholder="/absolute/path/to/project"
+            />
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -135,6 +167,14 @@ function RunPortfolioForm() {
 }
 
 /* ─── Helpers ─── */
+
+/** Safely convert unknown to string for rendering */
+function s(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  return JSON.stringify(v);
+}
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -430,27 +470,259 @@ function DecisionsSection({ status }: { status: PortfolioStatusResponse }) {
   );
 }
 
-/* ─── Execution Results Section ─── */
+/* ─── Execution Results Section (Rich Initiative Detail) ─── */
+
+const VERDICT_COLORS: Record<string, string> = {
+  scale: 'bg-green-500/10 text-green-400',
+  continue: 'bg-blue-500/10 text-blue-400',
+  iterate: 'bg-amber-500/10 text-amber-400',
+  pivot: 'bg-amber-500/10 text-amber-400',
+  kill: 'bg-red-500/10 text-red-400',
+};
+
+function JsonBlock({ data, maxHeight }: { data: unknown; maxHeight?: string }) {
+  const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  return (
+    <pre className={cn('text-[10px] text-gray-400 bg-surface-overlay/50 rounded px-3 py-2 overflow-auto font-mono', maxHeight ?? 'max-h-48')}>
+      {text}
+    </pre>
+  );
+}
+
+function InitiativeDetail({ r, index }: { r: ExecutionResultItem; index: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const prd = r.prd as Record<string, unknown> | null | undefined;
+  const secReview = r.security_review as Record<string, unknown> | null | undefined;
+  const evaluation = r.evaluation as Record<string, unknown> | null | undefined;
+  const hasPrd = prd && Object.keys(prd).length > 0;
+  const hasDesign = r.design_document && r.design_document !== 'null' && r.design_document !== 'None';
+  const hasSecurity = secReview && Object.keys(secReview).length > 0;
+  const hasTasks = r.task_graph && r.task_graph.length > 0;
+  const hasExecution = r.execution_details && r.execution_details.length > 0;
+  const hasEval = evaluation && Object.keys(evaluation).length > 0;
+  const hasDetails = hasPrd || hasDesign || hasSecurity || hasTasks || hasExecution || hasEval;
+
+  return (
+    <div className="rounded-lg bg-surface border border-border/50 overflow-hidden">
+      {/* Header */}
+      <button
+        onClick={() => hasDetails && setExpanded(!expanded)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 hover:bg-surface-overlay/20 transition-colors"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-sm">{r.action === 'completed' ? '✓' : r.action === 'failed' ? '✗' : r.action === 'timeout' ? '⏱' : '?'}</span>
+          <span className="text-sm font-medium text-gray-200 truncate">{r.title || `Initiative ${index + 1}`}</span>
+          <Badge className={cn('text-[9px]', VERDICT_COLORS[r.verdict] ?? 'bg-gray-500/10 text-gray-400')}>
+            {r.verdict || r.action}
+          </Badge>
+          {r.north_star_metric && (
+            <span className="text-[10px] text-gray-500 hidden sm:inline">📊 {r.north_star_metric}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 text-[10px] text-gray-500 shrink-0">
+          {r.budget_spent > 0 && <span>${r.budget_spent.toFixed(2)}</span>}
+          {r.tasks_executed > 0 && <span>{r.tasks_executed} tasks</span>}
+          {hasDetails && (expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />)}
+        </div>
+      </button>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div className="border-t border-border px-3 py-3 space-y-4">
+          {/* PRD */}
+          {hasPrd && (
+            <div>
+              <h4 className="text-[10px] font-semibold uppercase text-blue-400 mb-1 flex items-center gap-1">
+                <Target size={10} /> Product Requirements
+              </h4>
+              {typeof prd?.problem_statement === 'string' && prd.problem_statement && (
+                <div className="mb-2">
+                  <span className="text-[9px] uppercase text-gray-500">Problem</span>
+                  <p className="text-xs text-gray-300">{prd.problem_statement}</p>
+                </div>
+              )}
+              {typeof prd?.proposed_solution === 'string' && prd.proposed_solution && (
+                <div className="mb-2">
+                  <span className="text-[9px] uppercase text-gray-500">Solution</span>
+                  <p className="text-xs text-gray-300">{prd.proposed_solution}</p>
+                </div>
+              )}
+              {Array.isArray(prd?.requirements) && (prd.requirements as Record<string, unknown>[]).length > 0 && (
+                <div className="mb-2">
+                  <span className="text-[9px] uppercase text-gray-500">Requirements</span>
+                  <div className="space-y-1 mt-1">
+                    {(prd.requirements as Record<string, unknown>[]).map((req, j) => (
+                      <div key={j} className="flex items-start gap-2 text-xs">
+                        <Badge className={cn('text-[8px] shrink-0',
+                          req.priority === 'must' ? 'bg-red-500/10 text-red-400' :
+                          req.priority === 'should' ? 'bg-amber-500/10 text-amber-400' :
+                          'bg-gray-500/10 text-gray-400'
+                        )}>
+                          {s(req.priority ?? 'must')}
+                        </Badge>
+                        <span className="text-gray-300">{s(req.description)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {r.success_threshold && (
+                <div className="text-[10px] text-gray-500">
+                  Success: {r.success_threshold}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Architecture Design */}
+          {hasDesign && (
+            <div>
+              <h4 className="text-[10px] font-semibold uppercase text-purple-400 mb-1 flex items-center gap-1">
+                <Gavel size={10} /> Architecture Design
+              </h4>
+              <JsonBlock data={r.design_document} />
+            </div>
+          )}
+
+          {/* Security Review */}
+          {hasSecurity && (
+            <div>
+              <h4 className="text-[10px] font-semibold uppercase mb-1 flex items-center gap-1">
+                <AlertTriangle size={10} className={secReview?.cleared ? 'text-green-400' : 'text-red-400'} />
+                <span className={secReview?.cleared ? 'text-green-400' : 'text-red-400'}>
+                  Security Review — {secReview?.cleared ? 'CLEARED' : 'NOT CLEARED'} ({s(secReview?.risk_level ?? 'unknown')} risk)
+                </span>
+              </h4>
+              {Array.isArray(secReview?.findings) && (secReview.findings as Record<string, unknown>[]).length > 0 && (
+                <div className="space-y-1">
+                  {(secReview.findings as Record<string, unknown>[]).map((f, j) => (
+                    <div key={j} className="rounded bg-surface-overlay/30 px-2 py-1 text-xs">
+                      <Badge className={cn('text-[8px] mr-1',
+                        f.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
+                        f.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
+                        f.severity === 'medium' ? 'bg-amber-500/20 text-amber-400' :
+                        'bg-gray-500/20 text-gray-400'
+                      )}>
+                        {s(f.severity)}
+                      </Badge>
+                      <span className="text-gray-300 font-medium">{s(f.title)}</span>
+                      {f.mitigation ? <span className="text-gray-500 ml-1">→ {s(f.mitigation)}</span> : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Task Graph */}
+          {hasTasks && (
+            <div>
+              <h4 className="text-[10px] font-semibold uppercase text-cyan-400 mb-1 flex items-center gap-1">
+                <Rocket size={10} /> Task Graph ({r.task_graph!.length} tasks)
+              </h4>
+              <div className="space-y-1">
+                {r.task_graph!.map((task, j) => (
+                  <div key={j} className="flex items-center gap-2 text-xs rounded bg-surface-overlay/30 px-2 py-1">
+                    <span className="text-gray-500 font-mono w-6 text-right">{j + 1}</span>
+                    <span className="text-gray-300">{s(task.title ?? task.description ?? `Task ${j+1}`)}</span>
+                    {task.assigned_agent ? (
+                      <Badge className="bg-surface-overlay text-gray-400 text-[8px] ml-auto">{s(task.assigned_agent)}</Badge>
+                    ) : null}
+                    {task.effort ? <Badge className="bg-surface-overlay text-gray-500 text-[8px]">{s(task.effort)}</Badge> : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Execution Details */}
+          {hasExecution && (
+            <div>
+              <h4 className="text-[10px] font-semibold uppercase text-green-400 mb-1 flex items-center gap-1">
+                <Zap size={10} /> Execution Details
+              </h4>
+              <div className="space-y-1">
+                {r.execution_details!.map((ex, j) => {
+                  const output = ex.output as Record<string, unknown> | undefined;
+                  const codeArtifacts = output?.code_artifacts as Record<string, unknown>[] | undefined;
+                  return (
+                    <div key={j} className="rounded bg-surface-overlay/30 px-2 py-1.5 text-xs space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={ex.status === 'completed' ? 'text-green-400' : 'text-red-400'}>
+                          {ex.status === 'completed' ? '✓' : '✗'}
+                        </span>
+                        <span className="text-gray-300 font-medium">{s(ex.title ?? `Task ${j+1}`)}</span>
+                        <Badge className="bg-surface-overlay text-gray-500 text-[8px]">{s(ex.agent_id ?? '?')}</Badge>
+                      </div>
+                      {codeArtifacts && codeArtifacts.length > 0 && (
+                        <div className="ml-4 text-[10px] text-gray-500">
+                          Files: {codeArtifacts.map(a => s(a.path)).join(', ')}
+                        </div>
+                      )}
+                      {ex.error ? (
+                        <div className="ml-4 text-[10px] text-red-400">{s(ex.error)}</div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Evaluation */}
+          {hasEval && (
+            <div>
+              <h4 className="text-[10px] font-semibold uppercase text-purple-400 mb-1 flex items-center gap-1">
+                <Scale size={10} /> Evaluation
+              </h4>
+              <div className="rounded bg-surface-overlay/30 px-3 py-2 text-xs space-y-1">
+                {evaluation?.verdict ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500">Verdict:</span>
+                    <Badge className={cn('text-[9px]', VERDICT_COLORS[s(evaluation.verdict)] ?? '')}>
+                      {s(evaluation.verdict)}
+                    </Badge>
+                  </div>
+                ) : null}
+                {evaluation?.reasoning ? (
+                  <p className="text-gray-300 leading-relaxed">{s(evaluation.reasoning)}</p>
+                ) : null}
+                {evaluation?.iterate_guidance ? (
+                  <div>
+                    <span className="text-amber-400 text-[10px]">Iterate guidance: </span>
+                    <span className="text-gray-400">{s(evaluation.iterate_guidance)}</span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          {/* Decisions Trail */}
+          {r.decisions && r.decisions.length > 0 && (
+            <div>
+              <h4 className="text-[10px] font-semibold uppercase text-gray-400 mb-1">Decision Trail</h4>
+              <div className="space-y-1">
+                {r.decisions.map((d, j) => (
+                  <div key={j} className="text-[10px] text-gray-500 flex gap-2">
+                    <Badge className="bg-surface-overlay text-gray-400 text-[8px]">{s(d.agent ?? '?')}</Badge>
+                    <span>{s(d.decision ?? d.reasoning ?? '')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ResultsSection({ status }: { status: PortfolioStatusResponse }) {
   if (status.results.length === 0 && status.execution_results === 0) return null;
 
-  const verdictColors: Record<string, string> = {
-    scale: 'bg-green-500/10 text-green-400',
-    continue: 'bg-blue-500/10 text-blue-400',
-    pivot: 'bg-amber-500/10 text-amber-400',
-    kill: 'bg-red-500/10 text-red-400',
-  };
-  const actionIcons: Record<string, string> = {
-    completed: '✓',
-    failed: '✗',
-    timeout: '⏱',
-    killed: '☠',
-  };
-
   return (
     <Collapsible
-      title="Execution Results"
+      title="Initiatives Executed"
       icon={Rocket}
       count={status.execution_results}
       defaultOpen={status.current_phase === 'closed'}
@@ -460,21 +732,7 @@ function ResultsSection({ status }: { status: PortfolioStatusResponse }) {
       ) : (
         <div className="space-y-2">
           {status.results.map((r, i) => (
-            <div key={i} className="rounded-lg bg-surface px-3 py-2 border border-border/50">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">{actionIcons[r.action] ?? '?'}</span>
-                  <span className="text-sm font-medium text-gray-200">{r.title || `Initiative ${i + 1}`}</span>
-                  <Badge className={cn('text-[9px]', verdictColors[r.verdict] ?? 'bg-gray-500/10 text-gray-400')}>
-                    {r.verdict || r.action}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-3 text-[10px] text-gray-500">
-                  {r.budget_spent > 0 && <span>${r.budget_spent.toFixed(2)}</span>}
-                  {r.tasks_executed > 0 && <span>{r.tasks_executed} tasks</span>}
-                </div>
-              </div>
-            </div>
+            <InitiativeDetail key={i} r={r} index={i} />
           ))}
         </div>
       )}

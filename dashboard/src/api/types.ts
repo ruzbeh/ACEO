@@ -255,6 +255,16 @@ export interface ExecutionResultItem {
   verdict: string;
   budget_spent: number;
   tasks_executed: number;
+  // Rich initiative internals
+  prd?: Record<string, unknown> | null;
+  design_document?: string | null;
+  security_review?: Record<string, unknown> | null;
+  task_graph?: Record<string, unknown>[];
+  execution_details?: Record<string, unknown>[];
+  evaluation?: Record<string, unknown> | null;
+  decisions?: Record<string, unknown>[];
+  north_star_metric?: string | null;
+  success_threshold?: string | null;
 }
 
 export interface PortfolioMessage {

@@ -64,6 +64,16 @@ class ExecutionResultItem(BaseModel):
     verdict: str = ""
     budget_spent: float = 0
     tasks_executed: int = 0
+    # Rich initiative internals
+    prd: Optional[dict] = None
+    design_document: Optional[str] = None
+    security_review: Optional[dict] = None
+    task_graph: List[dict] = []
+    execution_details: List[dict] = []
+    evaluation: Optional[dict] = None
+    decisions: List[dict] = []
+    north_star_metric: Optional[str] = None
+    success_threshold: Optional[str] = None
 
 class PortfolioStatusResponse(BaseModel):
     portfolio_id: str
@@ -117,6 +127,15 @@ def _build_status_response(portfolio_id: str, state: dict, status: str) -> Portf
     results = []
     for r in raw_results:
         if isinstance(r, dict):
+            # Parse design_document if it's a JSON string
+            design_doc = r.get("design_document")
+            if isinstance(design_doc, str):
+                try:
+                    import json as _json
+                    design_doc = _json.loads(design_doc)
+                except Exception:
+                    pass  # keep as string
+
             results.append(ExecutionResultItem(
                 title=r.get("title", ""),
                 initiative_id=r.get("initiative_id", ""),
@@ -124,6 +143,15 @@ def _build_status_response(portfolio_id: str, state: dict, status: str) -> Portf
                 verdict=r.get("verdict", ""),
                 budget_spent=r.get("budget_spent", 0),
                 tasks_executed=r.get("tasks_executed", 0),
+                prd=r.get("prd"),
+                design_document=str(design_doc) if design_doc else None,
+                security_review=r.get("security_review"),
+                task_graph=r.get("task_graph", []),
+                execution_details=r.get("execution_details", []),
+                evaluation=r.get("evaluation"),
+                decisions=r.get("decisions", []),
+                north_star_metric=r.get("north_star_metric"),
+                success_threshold=str(r.get("success_threshold")) if r.get("success_threshold") else None,
             ))
 
     raw_messages = state.get("messages", [])
