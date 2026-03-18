@@ -8,5 +8,7 @@ venv/
 workspace/
 !workspace/.gitkeep
 chroma_data/
+logs/
 *.db
 .DS_Store
+node_modules/

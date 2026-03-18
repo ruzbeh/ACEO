@@ -1,8 +1,9 @@
 import enum
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
-from sqlalchemy import JSON, DateTime, Enum, String, Text
+from sqlalchemy import ForeignKey, JSON, DateTime, Enum, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from aeco.db.base import Base
@@ -22,12 +23,18 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    clickup_task_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    initiative_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("initiatives.id"), index=True
+    )
+    clickup_task_id: Mapped[Optional[str]] = mapped_column(String(64), index=True)
     title: Mapped[str] = mapped_column(String(500))
     description: Mapped[str] = mapped_column(Text, default="")
-    status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.TODO)
-    assigned_agent_id: Mapped[str | None] = mapped_column(String(100))
-    workflow_run_id: Mapped[uuid.UUID | None] = mapped_column()
+    status: Mapped[TaskStatus] = mapped_column(
+        Enum(TaskStatus, values_callable=lambda e: [x.value for x in e]),
+        default=TaskStatus.TODO,
+    )
+    assigned_agent_id: Mapped[Optional[str]] = mapped_column(String(100))
+    workflow_run_id: Mapped[Optional[uuid.UUID]] = mapped_column()
     metadata_: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

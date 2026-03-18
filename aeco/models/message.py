@@ -26,7 +26,9 @@ class AgentMessage(Base):
     workflow_run_id: Mapped[uuid.UUID] = mapped_column(index=True)
     sender_agent_id: Mapped[str] = mapped_column(String(100))
     recipient_agent_id: Mapped[str] = mapped_column(String(100))
-    message_type: Mapped[MessageType] = mapped_column(Enum(MessageType))
+    message_type: Mapped[MessageType] = mapped_column(
+        Enum(MessageType, values_callable=lambda e: [x.value for x in e])
+    )
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     task_id: Mapped[uuid.UUID] = mapped_column(index=True)
     created_at: Mapped[datetime] = mapped_column(

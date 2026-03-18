@@ -17,6 +17,7 @@ class AnthropicProvider(LLMProvider):
             temperature=config.temperature,
             max_tokens=config.max_tokens,
             api_key=settings.anthropic_api_key,
+            timeout=settings.llm_request_timeout,
         )
 
     def get_chat_model(self) -> BaseChatModel:

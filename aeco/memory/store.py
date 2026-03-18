@@ -1,8 +1,9 @@
 """Postgres-backed structured memory for persisting workflow knowledge."""
+from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import JSON, DateTime, String, Text, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,7 +37,7 @@ class MemoryStore:
         self._session_factory = session_factory
 
     async def store(
-        self, category: str, key: str, value: dict, metadata: dict | None = None
+        self, category: str, key: str, value: dict, metadata: Optional[dict] = None
     ) -> MemoryEntry:
         async with self._session_factory() as session:
             session: AsyncSession

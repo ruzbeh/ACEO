@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -16,13 +17,13 @@ class AuditLogEntry(Base):
     )
     agent_id: Mapped[str] = mapped_column(String(100), index=True)
     action: Mapped[str] = mapped_column(String(100))
-    workflow_run_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
-    task_id: Mapped[uuid.UUID | None] = mapped_column()
+    workflow_run_id: Mapped[Optional[uuid.UUID]] = mapped_column(index=True)
+    task_id: Mapped[Optional[uuid.UUID]] = mapped_column()
     input_summary: Mapped[str] = mapped_column(Text, default="")
     output_summary: Mapped[str] = mapped_column(Text, default="")
-    llm_provider: Mapped[str | None] = mapped_column(String(50))
-    llm_model: Mapped[str | None] = mapped_column(String(100))
-    tokens_used: Mapped[int | None] = mapped_column(Integer)
-    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    llm_provider: Mapped[Optional[str]] = mapped_column(String(50))
+    llm_model: Mapped[Optional[str]] = mapped_column(String(100))
+    tokens_used: Mapped[Optional[int]] = mapped_column(Integer)
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
     success: Mapped[bool] = mapped_column(Boolean, default=True)
-    error_message: Mapped[str | None] = mapped_column(Text)
+    error_message: Mapped[Optional[str]] = mapped_column(Text)

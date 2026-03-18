@@ -1,7 +1,9 @@
 """ChromaDB-based vector memory for semantic search over artifacts."""
+from __future__ import annotations
 
 import logging
 import uuid
+from typing import Any
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
@@ -9,15 +11,34 @@ from chromadb.config import Settings as ChromaSettings
 logger = logging.getLogger(__name__)
 
 
+def _create_chroma_client(
+    *,
+    host: str | None = None,
+    port: int = 8001,
+    persist_directory: str = "./chroma_data",
+) -> Any:
+    """Create Chroma client: HttpClient if host is set, else PersistentClient."""
+    if host:
+        return chromadb.HttpClient(host=host, port=port)
+    return chromadb.PersistentClient(
+        path=persist_directory,
+        settings=ChromaSettings(anonymized_telemetry=False),
+    )
+
+
 class VectorMemory:
     """Semantic search over past artifacts using ChromaDB."""
 
-    def __init__(self, persist_directory: str = "./chroma_data") -> None:
-        self._client = chromadb.Client(
-            ChromaSettings(
-                persist_directory=persist_directory,
-                anonymized_telemetry=False,
-            )
+    def __init__(
+        self,
+        persist_directory: str = "./chroma_data",
+        host: str | None = None,
+        port: int = 8001,
+    ) -> None:
+        self._client = _create_chroma_client(
+            host=host,
+            port=port,
+            persist_directory=persist_directory,
         )
         self._collection = self._client.get_or_create_collection(
             name="aeco_artifacts",
@@ -45,14 +66,20 @@ class VectorMemory:
             query_texts=[query],
             n_results=n_results,
         )
+        ids = results.get("ids") and results["ids"][0]
+        if not ids:
+            return []
         docs = []
-        for i in range(len(results["ids"][0])):
+        documents = (results.get("documents") or [[]])[0]
+        metadatas = (results.get("metadatas") or [[]])[0]
+        distances = (results.get("distances") or [[]])[0]
+        for i in range(len(ids)):
             docs.append(
                 {
-                    "id": results["ids"][0][i],
-                    "content": results["documents"][0][i],
-                    "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                    "distance": results["distances"][0][i] if results["distances"] else None,
+                    "id": ids[i],
+                    "content": documents[i] if i < len(documents) else "",
+                    "metadata": metadatas[i] if i < len(metadatas) else {},
+                    "distance": distances[i] if i < len(distances) else None,
                 }
             )
         return docs

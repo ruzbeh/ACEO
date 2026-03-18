@@ -1,9 +1,12 @@
 """ClickUp operations exposed as tool functions for agents."""
+from __future__ import annotations
+
+from typing import Optional
 
 from aeco.config import settings
 from aeco.integrations.clickup.client import ClickUpClient
 
-_client: ClickUpClient | None = None
+_client: Optional[ClickUpClient] = None
 
 
 def _get_client() -> ClickUpClient:

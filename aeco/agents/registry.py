@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import yaml
@@ -24,6 +26,9 @@ class AgentRegistry:
         if agent_id not in self._agents:
             raise KeyError(f"Agent '{agent_id}' not found in registry")
         return self._agents[agent_id]
+
+    def has(self, agent_id: str) -> bool:
+        return agent_id in self._agents
 
     def list_agents(self) -> list[AgentDefinition]:
         return list(self._agents.values())

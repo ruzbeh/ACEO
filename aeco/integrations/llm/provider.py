@@ -23,14 +23,17 @@ class LLMProvider(ABC):
 class LLMProviderFactory:
     @staticmethod
     def create(config: LLMConfig) -> LLMProvider:
-        match config.provider:
-            case "anthropic":
-                from aeco.integrations.llm.anthropic import AnthropicProvider
+        provider = config.provider
+        if provider == "anthropic":
+            from aeco.integrations.llm.anthropic import AnthropicProvider
 
-                return AnthropicProvider(config)
-            case "openai":
-                from aeco.integrations.llm.openai import OpenAIProvider
+            return AnthropicProvider(config)
+        if provider == "openai":
+            from aeco.integrations.llm.openai import OpenAIProvider
 
-                return OpenAIProvider(config)
-            case _:
-                raise ValueError(f"Unknown LLM provider: {config.provider}")
+            return OpenAIProvider(config)
+        if provider == "openrouter":
+            from aeco.integrations.llm.openrouter import OpenRouterProvider
+
+            return OpenRouterProvider(config)
+        raise ValueError(f"Unknown LLM provider: {config.provider}")

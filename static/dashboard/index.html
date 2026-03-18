@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AECO — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0d0f12;
+      --surface: #161a20;
+      --surface-hover: #1c2129;
+      --border: #2a313c;
+      --text: #e6e9ef;
+      --text-muted: #8b92a0;
+      --accent: #3b82f6;
+      --accent-dim: #2563eb;
+      --success: #22c55e;
+      --warning: #eab308;
+      --error: #ef4444;
+      --radius: 10px;
+      --font-sans: 'DM Sans', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    .container { max-width: 1280px; margin: 0 auto; padding: 1.5rem; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 0 1.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+    }
+    .logo {
+      font-weight: 700;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .logo span { color: var(--accent); }
+    .refresh {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      padding: 0.5rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius);
+      cursor: pointer;
+    }
+    .refresh:hover { background: var(--surface-hover); }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+    }
+    .card h3 {
+      margin: 0 0 0.25rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+    .card .value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .card.budget .value { color: var(--accent); }
+    .card.tasks .value .done { color: var(--success); }
+    .card.tasks .value .progress { color: var(--warning); }
+    .card.tasks .value .todo { color: var(--text-muted); }
+
+    section { margin-bottom: 2rem; }
+    section h2 {
+      margin: 0 0 1rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    th, td { padding: 0.75rem 1rem; text-align: left; }
+    th {
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+    tr:hover td { background: var(--surface-hover); }
+    .status {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    .status.todo, .status.draft { background: rgba(139,146,160,0.2); color: var(--text-muted); }
+    .status.in_progress, .status.running { background: rgba(234,179,8,0.2); color: var(--warning); }
+    .status.done, .status.completed, .status.shipped { background: rgba(34,197,94,0.2); color: var(--success); }
+    .status.failed, .status.blocked { background: rgba(239,68,68,0.2); color: var(--error); }
+    .status.killed { background: rgba(139,146,160,0.3); color: var(--text-muted); }
+    .mono { font-family: var(--font-mono); font-size: 0.8em; color: var(--text-muted); }
+    .loading { color: var(--text-muted); font-style: italic; }
+    .error { color: var(--error); }
+    .empty { color: var(--text-muted); padding: 1.5rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">AECO<span> — Dashboard</span></div>
+      <button class="refresh" type="button" id="refresh">Refresh</button>
+    </header>
+
+    <div class="summary">
+      <div class="card tasks">
+        <h3>Tasks</h3>
+        <div class="value" id="tasks-summary"><span class="loading">…</span></div>
+      </div>
+      <div class="card">
+        <h3>Initiatives</h3>
+        <div class="value" id="initiatives-count"><span class="loading">…</span></div>
+      </div>
+      <div class="card">
+        <h3>Workflow runs</h3>
+        <div class="value" id="workflows-count"><span class="loading">…</span></div>
+      </div>
+      <div class="card">
+        <h3>Agents</h3>
+        <div class="value" id="agents-count"><span class="loading">…</span></div>
+      </div>
+      <div class="card budget">
+        <h3>Active budget</h3>
+        <div class="value" id="budget-summary"><span class="loading">…</span></div>
+      </div>
+    </div>
+
+    <section>
+      <h2>Tasks</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Workflow</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody id="tasks-body"><tr><td colspan="4" class="loading">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Initiatives</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Goal</th>
+              <th>Status</th>
+              <th>Verdict</th>
+            </tr>
+          </thead>
+          <tbody id="initiatives-body"><tr><td colspan="4" class="loading">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Recent workflow runs</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Run ID</th>
+              <th>Task ID</th>
+              <th>Status</th>
+              <th>Node</th>
+              <th>Started</th>
+            </tr>
+          </thead>
+          <tbody id="workflows-body"><tr><td colspan="5" class="loading">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Agents</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Model</th>
+              <th>Tools</th>
+            </tr>
+          </thead>
+          <tbody id="agents-body"><tr><td colspan="4" class="loading">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const API = '';
+    function get(url) {
+      return fetch(API + url).then(r => {
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        return r.json();
+      });
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function statusClass(s) {
+      const v = (s || '').toLowerCase();
+      if (['todo', 'draft'].includes(v)) return 'todo';
+      if (['in_progress', 'running'].includes(v)) return 'in_progress';
+      if (['done', 'completed', 'shipped'].includes(v)) return 'done';
+      if (['failed', 'blocked'].includes(v)) return 'failed';
+      if (v === 'killed') return 'killed';
+      return 'todo';
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      const now = new Date();
+      const diff = now - d;
+      if (diff < 60000) return 'Just now';
+      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderTasks(tasks) {
+      const byStatus = { todo: 0, in_progress: 0, done: 0, blocked: 0 };
+      tasks.forEach(t => {
+        const s = (t.status || 'todo').toLowerCase();
+        if (s === 'done') byStatus.done++;
+        else if (s === 'in_progress') byStatus.in_progress++;
+        else if (s === 'blocked') byStatus.blocked++;
+        else byStatus.todo++;
+      });
+      document.getElementById('tasks-summary').innerHTML =
+        `<span class="done">${byStatus.done}</span> done · <span class="progress">${byStatus.in_progress}</span> in progress · <span class="todo">${byStatus.todo}</span> todo`;
+      const tbody = document.getElementById('tasks-body');
+      if (!tasks.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">No tasks yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = tasks.slice(0, 30).map(t => `
+        <tr>
+          <td>${escapeHtml(t.title)}</td>
+          <td><span class="status ${statusClass(t.status)}">${escapeHtml(t.status)}</span></td>
+          <td class="mono">${t.workflow_run_id ? escapeHtml(t.workflow_run_id.slice(0, 8)) + '…' : '—'}</td>
+          <td>${formatDate(t.updated_at)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderInitiatives(initiatives) {
+      document.getElementById('initiatives-count').textContent = initiatives.length;
+      const tbody = document.getElementById('initiatives-body');
+      if (!initiatives.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">No initiatives yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = initiatives.slice(0, 20).map(i => `
+        <tr>
+          <td>${escapeHtml(i.title)}</td>
+          <td>${escapeHtml((i.goal || '').slice(0, 60))}${(i.goal && i.goal.length > 60) ? '…' : ''}</td>
+          <td><span class="status ${statusClass(i.status)}">${escapeHtml(i.status)}</span></td>
+          <td><span class="status ${statusClass(i.verdict)}">${escapeHtml(i.verdict || '—')}</span></td>
+        </tr>
+      `).join('');
+    }
+
+    function renderWorkflows(workflows) {
+      document.getElementById('workflows-count').textContent = workflows.length;
+      const tbody = document.getElementById('workflows-body');
+      if (!workflows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">No workflow runs yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = workflows.slice(0, 20).map(w => `
+        <tr>
+          <td class="mono">${escapeHtml(w.id.slice(0, 8))}…</td>
+          <td class="mono">${escapeHtml(String(w.task_id).slice(0, 8))}…</td>
+          <td><span class="status ${statusClass(w.status)}">${escapeHtml(w.status)}</span></td>
+          <td class="mono">${escapeHtml(w.current_node || '—')}</td>
+          <td>${formatDate(w.started_at)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderAgents(agents) {
+      document.getElementById('agents-count').textContent = agents.length;
+      const tbody = document.getElementById('agents-body');
+      if (!agents.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">No agents registered</td></tr>';
+        return;
+      }
+      tbody.innerHTML = agents.map(a => `
+        <tr>
+          <td>${escapeHtml(a.name)}</td>
+          <td>${escapeHtml(a.role)}</td>
+          <td class="mono">${escapeHtml(a.llm_model || '—')}</td>
+          <td>${escapeHtml((a.tools || []).slice(0, 3).join(', '))}${(a.tools && a.tools.length > 3) ? '…' : ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderBudget(budget) {
+      const el = document.getElementById('budget-summary');
+      if (!budget) {
+        el.innerHTML = '<span style="color: var(--text-muted)">No active budget</span>';
+        el.className = 'value';
+        return;
+      }
+      el.innerHTML = `$${Number(budget.spent || 0).toFixed(2)} / $${Number(budget.total_budget || 0).toFixed(2)}`;
+      el.className = 'value';
+    }
+
+    async function load() {
+      try {
+        const [tasks, initiatives, workflows, agents] = await Promise.all([
+          get('/api/tasks'),
+          get('/api/initiatives'),
+          get('/api/workflows'),
+          get('/api/agents'),
+        ]);
+        renderTasks(tasks);
+        renderInitiatives(initiatives);
+        renderWorkflows(workflows);
+        renderAgents(agents);
+      } catch (e) {
+        document.getElementById('tasks-summary').innerHTML = '<span class="error">API error</span>';
+        document.getElementById('tasks-body').innerHTML = '<tr><td colspan="4" class="error">' + escapeHtml(String(e.message)) + '</td></tr>';
+      }
+
+      try {
+        const budget = await get('/api/budget/active');
+        renderBudget(budget);
+      } catch {
+        renderBudget(null);
+      }
+    }
+
+    document.getElementById('refresh').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>

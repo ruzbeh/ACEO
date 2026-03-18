@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Optional
 
 from aeco.models.agent import AgentDefinition
 
@@ -19,7 +19,7 @@ class ToolGateway:
         self._tool_permissions: dict[str, set[str]] = {}
 
     def register(
-        self, name: str, fn: Callable, required_permissions: set[str] | None = None
+        self, name: str, fn: Callable, required_permissions: Optional[set[str]] = None
     ) -> None:
         self._tools[name] = fn
         self._tool_permissions[name] = required_permissions or set()

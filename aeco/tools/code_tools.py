@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import tempfile
 from pathlib import Path
@@ -5,9 +7,12 @@ from pathlib import Path
 from aeco.config import settings
 
 
-async def code_execute(code: str, timeout: int = 30) -> dict:
+async def code_execute(
+    code: str, timeout: int = 30, workspace_path: str | None = None
+) -> dict:
     """Execute Python code in a subprocess. Used by QA for running tests."""
-    workspace = Path(settings.workspace_path).resolve()
+    ws = workspace_path or settings.workspace_path
+    workspace = Path(ws).resolve()
 
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".py", dir=workspace, delete=False

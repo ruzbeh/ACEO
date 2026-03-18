@@ -1,5 +1,5 @@
 import uuid
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,14 +16,14 @@ class AuditLogger:
         action: str,
         input_summary: str = "",
         output_summary: str = "",
-        workflow_run_id: uuid.UUID | None = None,
-        task_id: uuid.UUID | None = None,
-        llm_provider: str | None = None,
-        llm_model: str | None = None,
-        tokens_used: int | None = None,
-        duration_ms: int | None = None,
+        workflow_run_id: Optional[uuid.UUID] = None,
+        task_id: Optional[uuid.UUID] = None,
+        llm_provider: Optional[str] = None,
+        llm_model: Optional[str] = None,
+        tokens_used: Optional[int] = None,
+        duration_ms: Optional[int] = None,
         success: bool = True,
-        error_message: str | None = None,
+        error_message: Optional[str] = None,
     ) -> AuditLogEntry:
         entry = AuditLogEntry(
             agent_id=agent_id,

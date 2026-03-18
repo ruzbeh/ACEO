@@ -1,12 +1,16 @@
 """Task API routes."""
+from __future__ import annotations
 
+import asyncio
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from aeco.api.routes_workflows import trigger_workflow_for_task
 from aeco.db.session import get_session
 from aeco.models.task import Task, TaskStatus
 
@@ -20,12 +24,12 @@ class CreateTaskRequest(BaseModel):
 
 class TaskResponse(BaseModel):
     id: str
-    clickup_task_id: str | None
+    clickup_task_id: Optional[str]
     title: str
     description: str
     status: str
-    assigned_agent_id: str | None
-    workflow_run_id: str | None
+    assigned_agent_id: Optional[str]
+    workflow_run_id: Optional[str]
     created_at: str
     updated_at: str
 
@@ -46,7 +50,7 @@ async def create_task(
     await session.commit()
     await session.refresh(task)
 
-    # Workflow will be triggered asynchronously via routes_workflows
+    asyncio.create_task(trigger_workflow_for_task(task.id))
     return _to_response(task)
 
 
