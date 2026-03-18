@@ -375,6 +375,32 @@ agents:
       - clickup:read
       - clickup:comment
 
+  - agent_id: security_reviewer
+    name: Security Reviewer
+    role: security
+    system_prompt_path: aeco/agents/prompts/security_reviewer.md
+    executor: langchain
+    claude_code_config:
+      max_turns: 10
+      timeout_seconds: 300
+      allowed_tools:
+        - Read
+        - Glob
+        - Grep
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.2
+      max_tokens: 4096
+    tools:
+      - clickup_read_task
+      - clickup_create_comment
+      - file_read
+    permissions:
+      - clickup:read
+      - clickup:comment
+      - workspace:read
+
   - agent_id: postmortem_writer
     name: Postmortem Writer
     role: postmortem

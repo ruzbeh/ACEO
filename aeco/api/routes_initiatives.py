@@ -174,6 +174,15 @@ async def get_initiative_decisions(initiative_id: str):
     return {"initiative_id": initiative_id, "decisions": decisions}
 
 
+@router.get("/{initiative_id}/spend")
+async def get_initiative_spend(initiative_id: str, budget_id: Optional[str] = None):
+    """Get budget spend breakdown for this initiative (optionally scoped to a budget period)."""
+    from aeco.budget.engine import BudgetEngine
+    engine = BudgetEngine(async_session_factory)
+    bid = uuid.UUID(budget_id) if budget_id else None
+    return await engine.get_spend_by_initiative(uuid.UUID(initiative_id), budget_id=bid)
+
+
 # --- Internal ---
 
 
@@ -189,6 +198,7 @@ async def _execute_initiative(initiative: Initiative, workspace_path: str) -> No
             "project_context": None,
             "prd": None,
             "design_document": None,
+            "security_review": None,
             "task_graph": [],
             "execution_results": [],
             "evaluation": None,

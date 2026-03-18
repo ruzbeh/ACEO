@@ -16,6 +16,15 @@ from aeco.agents.registry import AgentRegistry
 from aeco.audit.logger import AuditLogger
 from aeco.config import settings
 from aeco.context.builder import ContextBuilder
+from aeco.events import (
+    INITIATIVE_CLOSED,
+    INITIATIVE_DECISION_RECORDED,
+    INITIATIVE_PHASE_CHANGED,
+    INITIATIVE_SECURITY_REVIEWED,
+    INITIATIVE_TASK_COMPLETED,
+    INITIATIVE_TASK_STARTED,
+    event_bus,
+)
 from aeco.memory.decision_ledger import DecisionLedgerStore
 from aeco.orchestrator.initiative_state import InitiativeState
 
@@ -57,6 +66,11 @@ class InitiativeNodes:
 
     async def intake(self, state: InitiativeState) -> dict:
         logger.info(f"Initiative intake: {state['title']}")
+        await event_bus.emit(INITIATIVE_PHASE_CHANGED, {
+            "initiative_id": state["initiative_id"],
+            "phase": "pm_spec",
+            "title": state["title"],
+        })
         return {
             "current_phase": "pm_spec",
             "messages": [_msg("system", "status", f"Initiative started: {state['title']}")],
@@ -103,6 +117,16 @@ class InitiativeNodes:
             confidence=result.get("confidence", 0.0),
             initiative_id=uuid.UUID(state["initiative_id"]),
         )
+        await event_bus.emit(INITIATIVE_DECISION_RECORDED, {
+            "initiative_id": state["initiative_id"],
+            "agent_id": "pm_agent",
+            "phase": "pm_spec",
+            "decision": result.get("decision", "PRD created"),
+        })
+        await event_bus.emit(INITIATIVE_PHASE_CHANGED, {
+            "initiative_id": state["initiative_id"],
+            "phase": "architect",
+        })
 
         return {
             "prd": prd,
@@ -159,10 +183,20 @@ class InitiativeNodes:
             confidence=result.get("confidence", 0.0),
             initiative_id=uuid.UUID(state["initiative_id"]),
         )
+        await event_bus.emit(INITIATIVE_DECISION_RECORDED, {
+            "initiative_id": state["initiative_id"],
+            "agent_id": "chief_architect",
+            "phase": "architect",
+            "decision": result.get("decision", "Architecture designed"),
+        })
+        await event_bus.emit(INITIATIVE_PHASE_CHANGED, {
+            "initiative_id": state["initiative_id"],
+            "phase": "security_review",
+        })
 
         return {
             "design_document": design_doc,
-            "current_phase": "task_planning",
+            "current_phase": "security_review",
             "decisions": [{
                 "agent": "chief_architect",
                 "phase": "architect",
@@ -170,6 +204,101 @@ class InitiativeNodes:
                 "confidence": result.get("confidence", 0.0),
             }],
             "messages": [_msg("chief_architect", "design_document", result)],
+        }
+
+    # ------------------------------------------------------------------
+    # security_review: Security Reviewer assesses the design
+    # ------------------------------------------------------------------
+
+    async def security_review(self, state: InitiativeState) -> dict:
+        """Security Reviewer assesses the architecture for vulnerabilities."""
+        logger.info("Security Reviewer: assessing design")
+
+        if not self.registry.has("security_reviewer"):
+            logger.info("No security_reviewer agent registered; skipping review")
+            await event_bus.emit(INITIATIVE_PHASE_CHANGED, {
+                "initiative_id": state["initiative_id"],
+                "phase": "task_planning",
+            })
+            return {
+                "security_review": {"risk_level": "low", "cleared": True, "findings": [], "skipped": True},
+                "current_phase": "task_planning",
+                "messages": [_msg("system", "status", "Security review skipped (no agent registered)")],
+            }
+
+        agent_def = self.registry.get("security_reviewer")
+        runtime = create_executor(agent_def, self.audit)
+
+        extra = {
+            "initiative_id": state["initiative_id"],
+            "title": state["title"],
+            "goal": state["goal"],
+            "design_document": state.get("design_document"),
+            "prd": state.get("prd"),
+        }
+        context = await self.ctx.build_for_initiative(
+            initiative_title=state["title"],
+            initiative_goal=state["goal"],
+            agent_role="security",
+            initiative_id=state["initiative_id"],
+            workspace_path=state.get("workspace_path", ""),
+            extra=extra,
+        )
+
+        result = await runtime.execute(context)
+        review = result.get("security_review", {})
+        risk_level = review.get("risk_level", "low")
+        cleared = review.get("cleared", True)
+
+        await self.ledger.record(
+            category="architecture",
+            agent_id="security_reviewer",
+            decision=result.get("decision", f"Security review: {risk_level} risk"),
+            reasoning=json.dumps(review.get("findings", []))[:500],
+            assumptions=result.get("assumptions", []),
+            risks=result.get("risks", []),
+            confidence=result.get("confidence", 0.0),
+            initiative_id=uuid.UUID(state["initiative_id"]),
+        )
+        await event_bus.emit(INITIATIVE_SECURITY_REVIEWED, {
+            "initiative_id": state["initiative_id"],
+            "risk_level": risk_level,
+            "cleared": cleared,
+            "findings_count": len(review.get("findings", [])),
+        })
+        await event_bus.emit(INITIATIVE_DECISION_RECORDED, {
+            "initiative_id": state["initiative_id"],
+            "agent_id": "security_reviewer",
+            "phase": "security_review",
+            "decision": result.get("decision", f"Security: {risk_level}"),
+        })
+
+        # Critical + not cleared → kill the initiative
+        next_phase = "task_planning"
+        if risk_level == "critical" and not cleared:
+            next_phase = "closed"
+            logger.warning(
+                f"Initiative '{state['title']}' killed: critical security risk"
+            )
+
+        await event_bus.emit(INITIATIVE_PHASE_CHANGED, {
+            "initiative_id": state["initiative_id"],
+            "phase": next_phase,
+        })
+
+        return {
+            "security_review": review,
+            "current_phase": next_phase,
+            "verdict": "kill" if next_phase == "closed" else None,
+            "decisions": [{
+                "agent": "security_reviewer",
+                "phase": "security_review",
+                "risk_level": risk_level,
+                "cleared": cleared,
+                "decision": result.get("decision", ""),
+                "confidence": result.get("confidence", 0.0),
+            }],
+            "messages": [_msg("security_reviewer", "security_review", review)],
         }
 
     # ------------------------------------------------------------------
@@ -211,6 +340,17 @@ class InitiativeNodes:
             confidence=result.get("confidence", 0.0),
             initiative_id=uuid.UUID(state["initiative_id"]),
         )
+        await event_bus.emit(INITIATIVE_DECISION_RECORDED, {
+            "initiative_id": state["initiative_id"],
+            "agent_id": "task_planner",
+            "phase": "task_planning",
+            "decision": result.get("decision", f"Planned {len(task_graph)} tasks"),
+        })
+        await event_bus.emit(INITIATIVE_PHASE_CHANGED, {
+            "initiative_id": state["initiative_id"],
+            "phase": "executing",
+            "task_count": len(task_graph),
+        })
 
         return {
             "task_graph": task_graph,
@@ -268,6 +408,11 @@ class InitiativeNodes:
             timeout_seconds = getattr(
                 settings, "initiative_task_timeout_seconds", 600
             )
+            await event_bus.emit(INITIATIVE_TASK_STARTED, {
+                "initiative_id": state["initiative_id"],
+                "task_title": task_title,
+                "agent_id": agent_id,
+            })
             try:
                 result = await asyncio.wait_for(
                     runtime.execute(context),
@@ -279,6 +424,12 @@ class InitiativeNodes:
                     "agent_id": agent_id,
                     "status": "completed",
                     "output": result,
+                })
+                await event_bus.emit(INITIATIVE_TASK_COMPLETED, {
+                    "initiative_id": state["initiative_id"],
+                    "task_title": task_title,
+                    "agent_id": agent_id,
+                    "status": "completed",
                 })
                 logger.info(f"Task '{task_title}' completed by {agent_id}")
             except asyncio.TimeoutError:
@@ -376,6 +527,18 @@ class InitiativeNodes:
             confidence=result.get("confidence", 0.0),
             initiative_id=uuid.UUID(state["initiative_id"]),
         )
+        await event_bus.emit(INITIATIVE_DECISION_RECORDED, {
+            "initiative_id": state["initiative_id"],
+            "agent_id": "agent_evaluator",
+            "phase": "evaluate",
+            "verdict": verdict,
+            "next_phase": next_phase,
+        })
+        await event_bus.emit(INITIATIVE_PHASE_CHANGED, {
+            "initiative_id": state["initiative_id"],
+            "phase": next_phase,
+            "verdict": verdict,
+        })
 
         return {
             "evaluation": result,
@@ -460,6 +623,13 @@ class InitiativeNodes:
                 logger.info(f"Postmortem written for initiative {state['initiative_id']}")
             except Exception as e:
                 logger.warning(f"Postmortem writer failed: {e}")
+
+        await event_bus.emit(INITIATIVE_CLOSED, {
+            "initiative_id": state["initiative_id"],
+            "verdict": verdict,
+            "iterations": state.get("iteration_count", 0),
+            "budget_spent": state.get("budget_spent", 0.0),
+        })
 
         return {
             "current_phase": "closed",

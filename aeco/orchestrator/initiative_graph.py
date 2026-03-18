@@ -1,6 +1,7 @@
 """LangGraph StateGraph assembly for the initiative-level workflow.
 Flow:
-    START → intake → pm_spec → architect → task_planning → execute_tasks → evaluate
+    START → intake → pm_spec → architect → security_review → task_planning → execute_tasks → evaluate
+    security_review --[critical & not cleared]→ close → END
     evaluate --[iterate & under max]→ task_planning (loop)
     evaluate --[scale | kill | max reached]→ close → END
 """
@@ -19,6 +20,13 @@ from aeco.orchestrator.initiative_nodes import InitiativeNodes
 from aeco.orchestrator.initiative_state import InitiativeState
 
 logger = logging.getLogger(__name__)
+
+
+def _post_security_review(state: InitiativeState) -> str:
+    """After security review, proceed to task planning or close if critical."""
+    if state.get("current_phase") == "closed":
+        return "close"
+    return "task_planning"
 
 
 def _post_evaluate(state: InitiativeState) -> str:
@@ -52,16 +60,28 @@ def build_initiative_graph(
     graph.add_node("intake", nodes.intake)
     graph.add_node("pm_spec", nodes.pm_spec)
     graph.add_node("architect", nodes.architect)
+    graph.add_node("security_review", nodes.security_review)
     graph.add_node("task_planning", nodes.task_planning)
     graph.add_node("execute_tasks", nodes.execute_tasks)
     graph.add_node("evaluate", nodes.evaluate)
     graph.add_node("close", nodes.close)
 
-    # Edges: linear pipeline with evaluate → iterate loop
+    # Edges: linear pipeline with security gate + evaluate → iterate loop
     graph.set_entry_point("intake")
     graph.add_edge("intake", "pm_spec")
     graph.add_edge("pm_spec", "architect")
-    graph.add_edge("architect", "task_planning")
+    graph.add_edge("architect", "security_review")
+
+    # Security review: cleared → task_planning, critical → close
+    graph.add_conditional_edges(
+        "security_review",
+        _post_security_review,
+        {
+            "task_planning": "task_planning",
+            "close": "close",
+        },
+    )
+
     graph.add_edge("task_planning", "execute_tasks")
     graph.add_edge("execute_tasks", "evaluate")
 

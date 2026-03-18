@@ -185,6 +185,10 @@ app.include_router(projects_router)
 app.include_router(budget_router)
 app.include_router(initiatives_router)
 
+# WebSocket for real-time events
+from aeco.api.routes_ws import router as ws_router
+app.include_router(ws_router)
+
 # Dashboard (static SPA) — prefer dashboard/dist/ build output, fallback to static/dashboard/
 _project_root = Path(__file__).resolve().parent.parent
 _dashboard_path = _project_root / "dashboard" / "dist"

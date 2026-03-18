@@ -3,8 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NetworkError } from './api/client';
+import { aecoWs } from './api/ws';
 import App from './App';
 import './index.css';
+
+// Connect to AECO WebSocket for real-time events
+aecoWs.connect();
 
 const queryClient = new QueryClient({
   defaultOptions: {

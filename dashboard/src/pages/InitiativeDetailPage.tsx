@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Play, Square, Target } from 'lucide-react';
-import { useInitiative, useRunInitiative, useKillInitiative } from '../api/initiatives';
+import { ArrowLeft, DollarSign, Play, Square, Target } from 'lucide-react';
+import { useInitiative, useRunInitiative, useKillInitiative, useInitiativeSpend } from '../api/initiatives';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -17,6 +17,7 @@ export function InitiativeDetailPage() {
   const { data: initiative, isLoading } = useInitiative(id!);
   const run = useRunInitiative();
   const kill = useKillInitiative();
+  const { data: spend } = useInitiativeSpend(id!);
 
   if (isLoading || !initiative) {
     return <div className="flex justify-center py-16"><Spinner className="h-8 w-8" /></div>;
@@ -130,6 +131,52 @@ export function InitiativeDetailPage() {
         <Card>
           <h3 className="mb-2 text-sm font-medium text-gray-300">Hypothesis</h3>
           <p className="text-sm text-gray-400">{initiative.hypothesis}</p>
+        </Card>
+      )}
+
+      {/* Budget spend for this initiative */}
+      {spend && (spend.total_cost > 0 || spend.records.length > 0) && (
+        <Card>
+          <h3 className="mb-4 flex items-center gap-2 text-sm font-medium text-gray-300">
+            <DollarSign size={16} className="text-accent" />
+            Initiative spend
+          </h3>
+          <div className="mb-4 flex gap-6">
+            <div>
+              <span className="text-xs text-gray-500">Total cost</span>
+              <p className="text-lg font-semibold text-gray-100">${spend.total_cost.toFixed(4)}</p>
+            </div>
+            <div>
+              <span className="text-xs text-gray-500">Tokens</span>
+              <p className="text-lg font-semibold text-gray-100">{spend.total_tokens.toLocaleString()}</p>
+            </div>
+          </div>
+          {Object.keys(spend.by_agent).length > 0 && (
+            <div className="mb-4">
+              <span className="text-xs font-medium uppercase text-gray-500">By agent</span>
+              <ul className="mt-2 space-y-1">
+                {Object.entries(spend.by_agent).map(([agent, v]) => (
+                  <li key={agent} className="flex justify-between text-sm">
+                    <span className="text-gray-300">{agent}</span>
+                    <span className="text-gray-200">${v.total.toFixed(4)} ({v.tokens.toLocaleString()} tokens)</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {spend.records.length > 0 && (
+            <div>
+              <span className="text-xs font-medium uppercase text-gray-500">Recent activity</span>
+              <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs">
+                {spend.records.slice(0, 10).map((r) => (
+                  <li key={r.id} className="flex justify-between text-gray-400">
+                    <span>{r.agent_id}</span>
+                    <span>${r.amount.toFixed(4)} · {formatDate(r.created_at)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Card>
       )}
 

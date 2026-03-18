@@ -20,6 +20,7 @@ class InitiativeState(TypedDict):
     design_document: Optional[str]          # Architect output
     task_graph: List[dict]               # Task Planner output
     execution_results: Annotated[List[dict], operator.add]  # Per-task results
+    security_review: Optional[dict]           # Security Reviewer output
     evaluation: Optional[dict]              # Evaluator output
 
     # Metrics defined by PM
@@ -32,7 +33,7 @@ class InitiativeState(TypedDict):
     decisions: Annotated[List[dict], operator.add]
 
     # Control flow
-    current_phase: str                   # intake, pm_spec, architect, task_planning, executing, evaluating, closed
+    current_phase: str                   # intake, pm_spec, architect, security_review, task_planning, executing, evaluating, closed
     verdict: Optional[str]                  # scale, iterate, kill
     iteration_count: int
     max_iterations: int
