@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Play, Target } from 'lucide-react';
-import { useInitiative, useRunInitiative } from '../api/initiatives';
+import { ArrowLeft, Play, Square, Target } from 'lucide-react';
+import { useInitiative, useRunInitiative, useKillInitiative } from '../api/initiatives';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -16,12 +16,14 @@ export function InitiativeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: initiative, isLoading } = useInitiative(id!);
   const run = useRunInitiative();
+  const kill = useKillInitiative();
 
   if (isLoading || !initiative) {
     return <div className="flex justify-center py-16"><Spinner className="h-8 w-8" /></div>;
   }
 
   const canRun = initiative.status === 'draft';
+  const canKill = initiative.status !== 'closed';
 
   return (
     <div className="space-y-6">
@@ -35,7 +37,7 @@ export function InitiativeDetailPage() {
             <h1 className="text-2xl font-bold">{initiative.title}</h1>
             <p className="mt-1 text-sm text-gray-400">{initiative.goal}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <VerdictBadge verdict={initiative.verdict} />
             {canRun && (
               <>
@@ -66,6 +68,17 @@ export function InitiativeDetailPage() {
                   </p>
                 )}
               </>
+            )}
+            {canKill && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => kill.mutate(initiative.id)}
+                disabled={kill.isPending}
+              >
+                <Square size={14} className="mr-1" />
+                {kill.isPending ? 'Killing...' : 'Kill'}
+              </Button>
             )}
           </div>
         </div>

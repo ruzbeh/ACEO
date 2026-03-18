@@ -52,3 +52,12 @@ export function useRunInitiative() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['initiatives'] }),
   });
 }
+
+export function useKillInitiative() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (initiativeId: string) =>
+      api.post<InitiativeResponse>(`/initiatives/${initiativeId}/kill`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['initiatives'] }),
+  });
+}

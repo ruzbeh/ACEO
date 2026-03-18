@@ -64,6 +64,7 @@ class SpendRequest:
         description: str = "",
         workflow_run_id: uuid.UUID | None = None,
         task_id: uuid.UUID | None = None,
+        initiative_id: uuid.UUID | None = None,
         tokens_used: int | None = None,
         llm_model: str | None = None,
     ):
@@ -73,6 +74,7 @@ class SpendRequest:
         self.description = description
         self.workflow_run_id = workflow_run_id
         self.task_id = task_id
+        self.initiative_id = initiative_id
         self.tokens_used = tokens_used
         self.llm_model = llm_model
 
@@ -252,9 +254,17 @@ class BudgetEngine:
     # ------------------------------------------------------------------
 
     async def request_spend(
-        self, request: SpendRequest, budget_id: uuid.UUID | None = None
+        self,
+        request: SpendRequest,
+        budget_id: uuid.UUID | None = None,
+        pre_approval_only: bool = False,
     ) -> SpendDecision:
-        """Evaluate a spend request against budget and policy."""
+        """Evaluate a spend request against budget and policy.
+
+        When pre_approval_only=True, only check and return decision; do not add
+        SpendRecord or update budget (used by workflow budget_check before agent runs).
+        Actual spend is recorded later from audit log via record_spend().
+        """
         async with self._session_factory() as session:
             # Find the budget
             if budget_id:
@@ -274,7 +284,10 @@ class BudgetEngine:
                 budget = result.scalars().first()
 
             if not budget:
-                # No budget configured — auto-approve with warning
+                logger.warning(
+                    "No active budget configured; spending is untracked. "
+                    "Create a budget period in the dashboard to monitor and control spend."
+                )
                 return SpendDecision(
                     status=ApprovalStatus.AUTO_APPROVED,
                     reasoning="No active budget configured; auto-approving",
@@ -298,6 +311,7 @@ class BudgetEngine:
                     budget_period_id=budget.id,
                     workflow_run_id=request.workflow_run_id,
                     task_id=request.task_id,
+                    initiative_id=request.initiative_id,
                     agent_id=request.agent_id,
                     category=request.category,
                     amount=request.amount,
@@ -389,42 +403,45 @@ class BudgetEngine:
                     "severity": "critical" if projected_util > 95 else "warning",
                 })
 
-            # Record the spend
-            approved = status in (ApprovalStatus.AUTO_APPROVED, ApprovalStatus.APPROVED)
-            record = SpendRecord(
-                budget_period_id=budget.id,
-                workflow_run_id=request.workflow_run_id,
-                task_id=request.task_id,
-                agent_id=request.agent_id,
-                category=request.category,
-                amount=request.amount,
-                description=request.description,
-                approval_status=status,
-                approved_by="budget_engine" if approved else None,
-                tokens_used=request.tokens_used,
-                llm_model=request.llm_model,
-            )
-            session.add(record)
+            # Record the spend (skip when pre_approval_only — actual spend recorded from audit)
+            if not pre_approval_only:
+                approved = status in (ApprovalStatus.AUTO_APPROVED, ApprovalStatus.APPROVED)
+                record = SpendRecord(
+                    budget_period_id=budget.id,
+                    workflow_run_id=request.workflow_run_id,
+                    task_id=request.task_id,
+                    initiative_id=request.initiative_id,
+                    agent_id=request.agent_id,
+                    category=request.category,
+                    amount=request.amount,
+                    description=request.description,
+                    approval_status=status,
+                    approved_by="budget_engine" if approved else None,
+                    tokens_used=request.tokens_used,
+                    llm_model=request.llm_model,
+                )
+                session.add(record)
 
-            if approved:
-                budget.spent += request.amount
-            elif status == ApprovalStatus.ESCALATED:
-                budget.reserved += request.amount
+                if approved:
+                    budget.spent += request.amount
+                elif status == ApprovalStatus.ESCALATED:
+                    budget.reserved += request.amount
 
-            # Create alerts for warnings
-            for w in warnings:
-                if w["severity"] in ("critical", "warning"):
-                    alert = BudgetAlert(
-                        budget_period_id=budget.id,
-                        alert_type=w["type"],
-                        severity=AlertSeverity(w["severity"]),
-                        message=w["message"],
-                        agent_id=request.agent_id,
-                        workflow_run_id=request.workflow_run_id,
-                    )
-                    session.add(alert)
+            # Create alerts for warnings (only when recording)
+            if not pre_approval_only:
+                for w in warnings:
+                    if w["severity"] in ("critical", "warning"):
+                        alert = BudgetAlert(
+                            budget_period_id=budget.id,
+                            alert_type=w["type"],
+                            severity=AlertSeverity(w["severity"]),
+                            message=w["message"],
+                            agent_id=request.agent_id,
+                            workflow_run_id=request.workflow_run_id,
+                        )
+                        session.add(alert)
 
-            await session.commit()
+                await session.commit()
 
             return SpendDecision(
                 status=status,
@@ -447,6 +464,7 @@ class BudgetEngine:
         llm_model: str | None = None,
         workflow_run_id: uuid.UUID | None = None,
         task_id: uuid.UUID | None = None,
+        initiative_id: uuid.UUID | None = None,
         description: str = "",
     ) -> SpendDecision:
         """Estimate cost from tokens and record as a spend request."""
@@ -458,6 +476,7 @@ class BudgetEngine:
             description=description or f"LLM call: {tokens_used} tokens on {llm_model}",
             workflow_run_id=workflow_run_id,
             task_id=task_id,
+            initiative_id=initiative_id,
             tokens_used=tokens_used,
             llm_model=llm_model,
         )
@@ -625,6 +644,131 @@ class BudgetEngine:
                     for k, v in breakdown.items()
                 },
             }
+
+    async def get_spend_by_initiative(
+        self, initiative_id: uuid.UUID, budget_id: uuid.UUID | None = None
+    ) -> dict:
+        """Get spend breakdown for an initiative (optionally within a budget period)."""
+        async with self._session_factory() as session:
+            stmt = (
+                select(
+                    SpendRecord.agent_id,
+                    func.sum(SpendRecord.amount).label("total"),
+                    func.sum(SpendRecord.tokens_used).label("tokens"),
+                    func.count(SpendRecord.id).label("count"),
+                )
+                .where(SpendRecord.initiative_id == initiative_id)
+            )
+            if budget_id:
+                stmt = stmt.where(SpendRecord.budget_period_id == budget_id)
+            stmt = stmt.group_by(SpendRecord.agent_id)
+            result = await session.execute(stmt)
+            by_agent: dict[str, dict] = {}
+            total_cost = 0.0
+            total_tokens = 0
+            for row in result:
+                by_agent[row.agent_id] = {
+                    "total": round(row.total, 4),
+                    "tokens": row.tokens or 0,
+                    "count": row.count,
+                }
+                total_cost += row.total
+                total_tokens += row.tokens or 0
+
+            # List records for timeline
+            stmt_records = (
+                select(SpendRecord)
+                .where(SpendRecord.initiative_id == initiative_id)
+            )
+            if budget_id:
+                stmt_records = stmt_records.where(SpendRecord.budget_period_id == budget_id)
+            stmt_records = stmt_records.order_by(SpendRecord.created_at.desc()).limit(50)
+            result_records = await session.execute(stmt_records)
+            records = [
+                {
+                    "id": str(r.id),
+                    "agent_id": r.agent_id,
+                    "amount": round(r.amount, 4),
+                    "tokens_used": r.tokens_used,
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in result_records.scalars().all()
+            ]
+
+            return {
+                "initiative_id": str(initiative_id),
+                "total_cost": round(total_cost, 4),
+                "total_tokens": total_tokens,
+                "by_agent": by_agent,
+                "records": records,
+            }
+
+    async def get_spend_over_time(
+        self,
+        budget_id: uuid.UUID,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+        group_by: str = "day",
+    ) -> dict:
+        """Get spend aggregated over time (daily or weekly buckets)."""
+        from sqlalchemy import cast, Date
+        async with self._session_factory() as session:
+            stmt = select(SpendRecord).where(SpendRecord.budget_period_id == budget_id)
+            if from_date:
+                stmt = stmt.where(SpendRecord.created_at >= from_date)
+            if to_date:
+                stmt = stmt.where(SpendRecord.created_at <= to_date)
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
+
+            # Bucket by date (day or week start)
+            buckets: dict[str, float] = {}
+            for r in rows:
+                dt = r.created_at
+                if group_by == "week":
+                    # ISO week Monday
+                    start = dt - datetime.timedelta(days=dt.weekday())
+                    key = start.strftime("%Y-%m-%d")
+                else:
+                    key = dt.strftime("%Y-%m-%d")
+                buckets[key] = buckets.get(key, 0.0) + r.amount
+
+            series = [{"date": k, "amount": round(v, 4)} for k, v in sorted(buckets.items())]
+            return {
+                "budget_id": str(budget_id),
+                "group_by": group_by,
+                "series": series,
+                "total": round(sum(buckets.values()), 4),
+            }
+
+    async def get_spend_by_initiative_list(
+        self, budget_id: uuid.UUID
+    ) -> list[dict]:
+        """Get total spend per initiative for the budget period (for dashboard)."""
+        async with self._session_factory() as session:
+            stmt = (
+                select(
+                    SpendRecord.initiative_id,
+                    func.sum(SpendRecord.amount).label("total"),
+                    func.sum(SpendRecord.tokens_used).label("tokens"),
+                    func.count(SpendRecord.id).label("count"),
+                )
+                .where(
+                    SpendRecord.budget_period_id == budget_id,
+                    SpendRecord.initiative_id.isnot(None),
+                )
+                .group_by(SpendRecord.initiative_id)
+            )
+            result = await session.execute(stmt)
+            return [
+                {
+                    "initiative_id": str(row.initiative_id),
+                    "total": round(row.total, 4),
+                    "tokens": row.tokens or 0,
+                    "count": row.count,
+                }
+                for row in result
+            ]
 
     async def get_optimization_report(
         self, budget_id: uuid.UUID

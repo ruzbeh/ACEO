@@ -1,4 +1,5 @@
 """Shared response parser for extracting JSON from agent output."""
+from __future__ import annotations
 
 import json
 import re

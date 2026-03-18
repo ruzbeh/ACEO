@@ -1,4 +1,5 @@
 """Agent registry API routes."""
+from __future__ import annotations
 
 from fastapi import APIRouter
 from pydantic import BaseModel

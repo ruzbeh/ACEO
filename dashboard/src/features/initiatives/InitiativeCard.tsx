@@ -41,7 +41,7 @@ export function InitiativeCard({ initiative, onCopy }: Props) {
       </div>
       <div className="mt-3 flex items-center gap-2">
         {(initiative.status === 'planning' || initiative.status === 'executing') && (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" title="Workflow running" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" aria-label="Workflow running" />
         )}
         <Badge className={INITIATIVE_STATUS_COLORS[initiative.status] ?? ''}>
           {initiative.status.replace('_', ' ')}

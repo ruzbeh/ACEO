@@ -1,4 +1,5 @@
 """Execute AECO agents via the Claude Code CLI subprocess."""
+from __future__ import annotations
 
 import asyncio
 import json

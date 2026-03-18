@@ -37,7 +37,7 @@ export function BudgetPage() {
         <EmptyState
           icon={Wallet}
           title="No active budget"
-          description="Create a budget period to start tracking spend."
+          description="Without an active budget period, spend is not monitored or logged. Create a budget to track agent usage (tokens/cost) and get alerts."
           action={<Button onClick={() => setOpen(true)} size="sm">Create Budget</Button>}
         />
       ) : (

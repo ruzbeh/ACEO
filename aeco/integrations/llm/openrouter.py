@@ -1,4 +1,5 @@
 """OpenRouter LLM provider — OpenAI-compatible API at https://openrouter.ai/api/v1."""
+from __future__ import annotations
 
 from typing import Any
 

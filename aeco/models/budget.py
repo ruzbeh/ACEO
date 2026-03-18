@@ -95,6 +95,7 @@ class SpendRecord(Base):
     )
     workflow_run_id: Mapped[Optional[uuid.UUID]] = mapped_column(index=True)
     task_id: Mapped[Optional[uuid.UUID]] = mapped_column(index=True)
+    initiative_id: Mapped[Optional[uuid.UUID]] = mapped_column(index=True)
     agent_id: Mapped[str] = mapped_column(String(100), index=True)
     category: Mapped[SpendCategory] = mapped_column(
         Enum(SpendCategory, values_callable=lambda e: [x.value for x in e]),

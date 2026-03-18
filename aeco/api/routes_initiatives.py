@@ -150,6 +150,21 @@ async def run_initiative(req: RunInitiativeRequest):
     }
 
 
+@router.post("/{initiative_id}/kill", response_model=InitiativeResponse)
+async def kill_initiative(
+    initiative_id: str, session: AsyncSession = Depends(get_session)
+):
+    """Mark initiative as killed (closed with verdict kill). Preserved even if workflow completes later."""
+    initiative = await session.get(Initiative, uuid.UUID(initiative_id))
+    if not initiative:
+        raise HTTPException(status_code=404, detail="Initiative not found")
+    initiative.status = InitiativeStatus.CLOSED.value
+    initiative.verdict = InitiativeVerdict.KILL.value
+    await session.commit()
+    await session.refresh(initiative)
+    return _to_response(initiative)
+
+
 @router.get("/{initiative_id}/decisions")
 async def get_initiative_decisions(initiative_id: str):
     """Get all decisions made during an initiative."""
@@ -204,10 +219,10 @@ async def _execute_initiative(initiative: Initiative, workspace_path: str) -> No
             f"verdict={verdict}, iterations={iterations}, tasks={tasks_executed}"
         )
 
-        # Update initiative in DB
+        # Update initiative in DB (skip if already closed e.g. user clicked Kill)
         async with async_session_factory() as session:
             db_init = await session.get(Initiative, initiative.id)
-            if db_init:
+            if db_init and db_init.status != InitiativeStatus.CLOSED.value:
                 db_init.status = InitiativeStatus.CLOSED.value
                 db_init.verdict = verdict
                 db_init.north_star_metric = final_state.get("north_star_metric")

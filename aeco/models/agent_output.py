@@ -3,6 +3,7 @@
 Forces explicit assumptions, risks, confidence, and success criteria so the system
 can route, evaluate, and learn. See docs/architecture-vision.md.
 """
+from __future__ import annotations
 
 from pydantic import BaseModel, Field
 

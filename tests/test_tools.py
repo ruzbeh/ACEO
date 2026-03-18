@@ -1,4 +1,5 @@
 """Tests for ToolGateway permission checking."""
+from __future__ import annotations
 
 import pytest
 import pytest_asyncio

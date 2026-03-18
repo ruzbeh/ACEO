@@ -2,6 +2,7 @@
 
 Flow: intake → pm_spec → architect → task_planning → execute_tasks → evaluate → close
 """
+from __future__ import annotations
 
 import asyncio
 import json

@@ -1,4 +1,5 @@
 """Node functions for the AECO LangGraph workflow."""
+from __future__ import annotations
 
 import json
 import logging
@@ -409,8 +410,9 @@ class WorkflowNodes:
         """
         run_id = state.get("workflow_run_id")
         task_id = state.get("task_id")
+        task_title = state.get("task_title", "")
         iteration = state.get("iteration_count", 0)
-        log_node_enter("budget_check", run_id=run_id, task_id=task_id)
+        log_node_enter("budget_check", run_id=run_id, task_id=task_id, task_title=task_title)
 
         if not self.budget_engine:
             log_node_exit("budget_check", run_id=run_id, task_id=task_id, next_action=None)
@@ -439,7 +441,7 @@ class WorkflowNodes:
             llm_model="anthropic/claude-sonnet-4",
         )
 
-        decision = await self.budget_engine.request_spend(request)
+        decision = await self.budget_engine.request_spend(request, pre_approval_only=True)
         approved = decision.status.value in ("auto_approved", "approved")
 
         updates: dict = {
