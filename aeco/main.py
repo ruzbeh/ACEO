@@ -155,6 +155,21 @@ async def lifespan(app: FastAPI):
     set_initiative_graph(initiative_graph)
     logger.info("Initiative workflow graph compiled")
 
+    # Build and register the portfolio-level workflow graph
+    from aeco.orchestrator.portfolio_graph import build_portfolio_graph
+    from aeco.api.routes_portfolio import set_portfolio_graph
+
+    portfolio_graph = build_portfolio_graph(
+        registry=registry,
+        audit_logger=audit_logger,
+        context_builder=context_builder,
+        decision_ledger=decision_ledger,
+        budget_engine=budget_engine,
+        initiative_graph=initiative_graph,
+    )
+    set_portfolio_graph(portfolio_graph)
+    logger.info("Portfolio workflow graph compiled")
+
     yield
 
     logger.info("AECO shutting down")
@@ -184,6 +199,10 @@ app.include_router(webhooks_router)
 app.include_router(projects_router)
 app.include_router(budget_router)
 app.include_router(initiatives_router)
+
+# Portfolio orchestration
+from aeco.api.routes_portfolio import router as portfolio_router
+app.include_router(portfolio_router)
 
 # WebSocket for real-time events
 from aeco.api.routes_ws import router as ws_router

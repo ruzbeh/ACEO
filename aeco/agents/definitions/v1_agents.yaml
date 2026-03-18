@@ -428,3 +428,57 @@ agents:
       - metrics:read
       - clickup:read
       - clickup:comment
+
+  - agent_id: product_strategist
+    name: Product Strategist
+    role: strategist
+    system_prompt_path: aeco/agents/prompts/product_strategist.md
+    executor: langchain
+    claude_code_config:
+      max_turns: 10
+      timeout_seconds: 300
+      allowed_tools:
+        - Read
+        - Glob
+        - Grep
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.5
+      max_tokens: 4096
+    tools:
+      - metrics_read
+      - agent_logs_read
+      - clickup_read_task
+    permissions:
+      - metrics:read
+      - agent_logs:read
+      - clickup:read
+
+  - agent_id: ceo_director
+    name: CEO / Portfolio Director
+    role: executive
+    system_prompt_path: aeco/agents/prompts/ceo_director.md
+    executor: langchain
+    claude_code_config:
+      max_turns: 10
+      timeout_seconds: 300
+      allowed_tools:
+        - Read
+        - Glob
+        - Grep
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.3
+      max_tokens: 4096
+    tools:
+      - metrics_read
+      - agent_logs_read
+      - budget_read
+      - clickup_read_task
+    permissions:
+      - metrics:read
+      - agent_logs:read
+      - budget:read
+      - clickup:read
