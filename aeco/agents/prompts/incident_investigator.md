@@ -21,32 +21,51 @@ You will receive:
 - `agent_logs`: Relevant audit trail entries
 - `error_details`: Error messages, stack traces, timeout info
 
+## CRITICAL: Output Format Rules
+- Respond with EXACTLY ONE JSON object inside ```json ... ``` markers
+- Use double quotes for all strings
+- No trailing commas, no comments, no extra text outside the JSON block
+- All fields shown below are REQUIRED unless marked (optional)
+
 ## Output Format
 
 ```json
 {
   "investigation": {
-    "root_cause": "Clear description of what went wrong",
+    "root_cause": "The backend_engineer agent generated code that called a non-existent SQLAlchemy method (session.upsert) causing an AttributeError. The method was hallucinated — SQLAlchemy does not have a native upsert. This caused task T2 to fail on execution, blocking T3-T5.",
     "timeline": [
-      {"timestamp": "...", "event": "...", "agent": "..."}
+      {"timestamp": "2026-03-18T10:15:00Z", "event": "Task T2 assigned to backend_engineer", "agent": "coo_orchestrator"},
+      {"timestamp": "2026-03-18T10:15:32Z", "event": "backend_engineer generated code artifact with session.upsert() call", "agent": "backend_engineer"},
+      {"timestamp": "2026-03-18T10:16:01Z", "event": "QA engineer ran tests — AttributeError on line 47 of retry_queue.py", "agent": "qa_engineer"},
+      {"timestamp": "2026-03-18T10:16:15Z", "event": "Task T2 marked as failed, blocking T3-T5", "agent": "coo_orchestrator"},
+      {"timestamp": "2026-03-18T10:16:30Z", "event": "Incident triggered: task_failure on T2 after 2 failed attempts", "agent": "system"}
     ],
     "impact": {
-      "severity": "low|medium|high|critical",
-      "affected_tasks": 0,
-      "budget_wasted": 0.0,
-      "data_integrity": "intact|degraded|compromised"
+      "severity": "medium",
+      "affected_tasks": 4,
+      "budget_wasted": 28.50,
+      "data_integrity": "intact"
     },
-    "contributing_factors": ["Factor 1", "Factor 2"],
+    "contributing_factors": ["backend_engineer hallucinated a non-existent API method", "No compile/import check before QA — the error could have been caught earlier", "Task description did not specify the exact SQLAlchemy pattern to use for upsert"],
     "corrective_actions": [
-      {"action": "...", "priority": "immediate|short_term|long_term", "owner": "agent_id or system"}
+      {"action": "Add a pre-QA syntax and import validation step that runs the code through Python's ast.parse and attempts imports before sending to QA", "priority": "short_term", "owner": "devops_engineer"},
+      {"action": "Update backend_engineer prompt to include a note: 'Only use documented SQLAlchemy methods. For upsert, use insert().on_conflict_do_update() from sqlalchemy.dialects.postgresql'", "priority": "immediate", "owner": "system"},
+      {"action": "Add common SQLAlchemy patterns as examples in the backend_engineer prompt to reduce hallucination risk", "priority": "short_term", "owner": "system"}
     ]
   },
-  "decision": "Summary of investigation findings",
-  "assumptions": ["What we assumed during investigation"],
-  "risks": ["Residual risks"],
-  "confidence": 0.8
+  "decision": "Root cause: hallucinated SQLAlchemy method. Medium severity — 4 tasks blocked, $28.50 wasted, no data corruption. Fix: add import validation step and update backend_engineer prompt with correct patterns.",
+  "assumptions": ["The hallucination was a one-off, not a systematic pattern in the backend_engineer agent", "Adding import validation will catch similar errors without significantly slowing the pipeline", "The correct SQLAlchemy upsert pattern (on_conflict_do_update) will work for this use case"],
+  "risks": ["If hallucination is systematic, the prompt fix alone will not solve it — may need model upgrade or few-shot examples", "Import validation step adds latency to every backend task, even those without issues", "The 2 failed attempts consumed budget that could have been avoided with the validation step"],
+  "confidence": 0.85
 }
 ```
+
+### Field Notes
+
+- `severity` in impact: One of `"low"`, `"medium"`, `"high"`, `"critical"`
+- `data_integrity`: One of `"intact"`, `"degraded"`, `"compromised"`
+- `priority` in corrective_actions: One of `"immediate"` (fix now), `"short_term"` (fix this week), `"long_term"` (architectural change)
+- `owner`: The agent_id or `"system"` responsible for implementing the corrective action
 
 ## Investigation Rules
 

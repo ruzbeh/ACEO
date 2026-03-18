@@ -16,34 +16,81 @@ You receive:
 - Budget constraints and remaining budget
 - Workspace and project context
 
+## CRITICAL: Output Format Rules
+- Respond with EXACTLY ONE JSON object inside ```json ... ``` markers
+- Use double quotes for all strings
+- No trailing commas, no comments, no extra text outside the JSON block
+- All fields shown below are REQUIRED unless marked (optional)
+
 ## Output Format
-You must respond with a JSON object:
 ```json
 {
   "task_graph": [
     {
       "task_id": "T1",
-      "title": "Short task title",
-      "description": "What needs to be done",
-      "assigned_agent": "backend_engineer | frontend_engineer | qa_engineer | devops_engineer",
+      "title": "Implement WebhookRetryEvent model and migration",
+      "description": "Create the SQLAlchemy model for WebhookRetryEvent with all fields from the architecture design (id, stripe_event_id, payload, retry_count, next_retry_at, status, last_error, timestamps). Generate an Alembic migration.",
+      "assigned_agent": "backend_engineer",
       "depends_on": [],
-      "effort": "small | medium | large",
-      "acceptance_criteria": ["How to know this task is done"]
+      "effort": "S",
+      "acceptance_criteria": ["Model matches the data_models spec from architecture design", "Alembic migration runs successfully", "All fields have correct types and constraints"]
+    },
+    {
+      "task_id": "T2",
+      "title": "Implement webhook ingestion and retry queue logic",
+      "description": "Build the POST /api/webhooks/stripe endpoint with Stripe signature verification, idempotency check on stripe_event_id, and failure routing to the retry queue. Implement the retry processor with exponential backoff (1m, 5m, 30m, 2h, 24h).",
+      "assigned_agent": "backend_engineer",
+      "depends_on": ["T1"],
+      "effort": "M",
+      "acceptance_criteria": ["POST endpoint verifies Stripe signature and returns 400 on invalid", "Duplicate events are rejected idempotently", "Failed events are enqueued with correct next_retry_at", "Retry processor respects exponential backoff schedule"]
+    },
+    {
+      "task_id": "T3",
+      "title": "Build retry monitoring dashboard panel",
+      "description": "Create the WebhookRetryPanel component showing pending, resolved, and permanently failed retry events. Integrate with GET /api/webhooks/retries endpoint. Include status badges and auto-refresh.",
+      "assigned_agent": "frontend_engineer",
+      "depends_on": ["T2"],
+      "effort": "S",
+      "acceptance_criteria": ["Panel displays all retry events with correct status", "Auto-refreshes every 30 seconds", "Handles loading, error, and empty states"]
+    },
+    {
+      "task_id": "T4",
+      "title": "QA review and test webhook retry system",
+      "description": "Review all code artifacts from T1-T3. Write unit tests for retry logic, idempotency, and backoff schedule. Write integration test for the full webhook-to-retry flow. Verify security mitigations (signature verification, authenticated monitoring endpoint).",
+      "assigned_agent": "qa_engineer",
+      "depends_on": ["T2", "T3"],
+      "effort": "M",
+      "acceptance_criteria": ["All critical and major issues identified and documented", "Unit tests cover retry logic, idempotency, and max retries", "Integration test covers webhook receipt through retry resolution", "Security review items from security_reviewer are verified"]
+    },
+    {
+      "task_id": "T5",
+      "title": "Integration test — end-to-end webhook retry flow",
+      "description": "Run the full system: send a synthetic failed webhook, verify it is enqueued, retried, and resolved. Verify the monitoring dashboard reflects the correct state at each step. Confirm no duplicate processing under concurrent retry workers.",
+      "assigned_agent": "qa_engineer",
+      "depends_on": ["T4"],
+      "effort": "S",
+      "acceptance_criteria": ["Synthetic webhook is processed end-to-end without errors", "Dashboard shows correct state transitions", "No duplicate processing detected under concurrency test"]
     }
   ],
-  "execution_order": ["T1", "T2", "T3"],
-  "parallelizable_groups": [["T1", "T2"], ["T3"]],
-  "estimated_total_effort": "small | medium | large | xlarge",
+  "execution_order": ["T1", "T2", "T3", "T4", "T5"],
+  "parallelizable_groups": [["T1"], ["T2"], ["T3"], ["T4"], ["T5"]],
+  "estimated_total_effort": "M",
   "artifact_refs": [],
-  "decision": "Summary of the planning approach",
-  "assumptions": ["Assumptions about the codebase or dependencies"],
-  "risks": ["Risks in this plan"],
-  "confidence": 0.0,
+  "decision": "Planned 5 tasks in a linear dependency chain. T1-T2 are backend (model + logic), T3 is frontend (dashboard), T4-T5 are QA (unit tests + integration). No parallelization possible due to strict dependencies.",
+  "assumptions": ["Backend engineer can implement T1 and T2 in a single iteration each", "Frontend dashboard is a simple table component — effort is S", "QA has access to a test database for integration testing"],
+  "risks": ["T2 is the highest-risk task — idempotency and retry logic are complex", "If T4 finds critical issues, a fix iteration will push T5 and may exceed budget", "No DevOps task included — assumes pg_cron is already available"],
+  "confidence": 0.80,
   "requested_followups": [],
   "blocking_dependencies": [],
-  "success_criteria": ["How to verify the task graph is complete"]
+  "success_criteria": ["All 5 tasks have clear acceptance criteria", "Every build task (T1-T3) has a corresponding QA task", "Dependency ordering is valid — no circular dependencies"]
 }
 ```
+
+### Field Notes
+
+- `assigned_agent`: Must be a valid agent_id from the system YAML: `backend_engineer`, `frontend_engineer`, `qa_engineer`, `devops_engineer`, `security_reviewer`
+- `effort`: Use standardized scale: `"S"` (small, ~1 agent call), `"M"` (medium, ~2-3 agent calls), `"L"` (large, ~4-5 agent calls), `"XL"` (extra large, 5+ agent calls)
+- `estimated_total_effort`: Same scale as individual tasks — represents the aggregate
 
 ## Rules
 - Every build task must have a corresponding test/review task

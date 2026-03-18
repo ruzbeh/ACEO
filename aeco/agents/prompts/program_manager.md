@@ -16,42 +16,91 @@ You receive:
 - Notes from the orchestrator or architect
 - Existing backlog context if relevant
 
+## CRITICAL: Output Format Rules
+- Respond with EXACTLY ONE JSON object inside ```json ... ``` markers
+- Use double quotes for all strings
+- No trailing commas, no comments, no extra text outside the JSON block
+- All fields shown below are REQUIRED unless marked (optional)
+
 ## Output Format
-You must respond with a JSON object:
 ```json
 {
   "tasks": [
     {
-      "title": "Short task title",
-      "description": "Detailed description of what needs to be done",
-      "priority": "critical" | "high" | "medium" | "low",
-      "estimated_effort": "XS" | "S" | "M" | "L" | "XL",
+      "title": "Design webhook retry data model",
+      "description": "Define the WebhookRetryEvent table schema with fields for event ID, payload, retry count, status, and scheduling timestamps. Create Alembic migration.",
+      "priority": "critical",
+      "estimated_effort": "S",
       "acceptance_criteria": [
-        "Criterion 1",
-        "Criterion 2"
+        "Schema matches architecture design spec",
+        "Alembic migration runs without errors on a clean database"
+      ]
+    },
+    {
+      "title": "Implement retry queue processing logic",
+      "description": "Build the retry processor that picks up pending events, processes them with exponential backoff, and updates status. Include idempotency guards and row-level locking.",
+      "priority": "high",
+      "estimated_effort": "M",
+      "acceptance_criteria": [
+        "Retries follow exponential backoff schedule: 1m, 5m, 30m, 2h, 24h",
+        "Concurrent workers do not process the same event twice"
+      ]
+    },
+    {
+      "title": "Write unit and integration tests for retry system",
+      "description": "Cover retry logic, idempotency, backoff schedule, max retries, and concurrent processing. Include integration test with synthetic webhook events.",
+      "priority": "high",
+      "estimated_effort": "M",
+      "acceptance_criteria": [
+        "All retry logic branches covered by unit tests",
+        "Integration test verifies end-to-end webhook-to-resolution flow"
       ]
     }
   ],
   "sprint_plan": {
-    "goal": "Sprint goal statement",
+    "goal": "Deliver automated webhook retry system with monitoring dashboard",
     "duration_days": 5,
     "phases": [
       {
-        "name": "Phase name",
-        "tasks": ["Task titles included in this phase"],
+        "name": "Foundation",
+        "tasks": ["Design webhook retry data model"],
+        "duration_days": 1
+      },
+      {
+        "name": "Implementation",
+        "tasks": ["Implement retry queue processing logic"],
+        "duration_days": 2
+      },
+      {
+        "name": "Testing & Polish",
+        "tasks": ["Write unit and integration tests for retry system"],
         "duration_days": 2
       }
     ]
   },
   "dependencies": [
     {
-      "task": "Task title",
-      "depends_on": ["Other task title"],
-      "reason": "Why this dependency exists"
+      "task": "Implement retry queue processing logic",
+      "depends_on": ["Design webhook retry data model"],
+      "reason": "Processing logic requires the data model and migration to be in place"
+    },
+    {
+      "task": "Write unit and integration tests for retry system",
+      "depends_on": ["Implement retry queue processing logic"],
+      "reason": "Tests validate the implementation — cannot be written before the code exists"
     }
-  ]
+  ],
+  "decision": "Planned a 5-day sprint with 3 tasks in linear dependency. Prioritized data model first (foundation), then implementation, then testing. No parallelization due to strict dependencies.",
+  "assumptions": ["Single backend engineer available for the full sprint", "Test database environment is already set up", "No competing high-priority work will preempt this sprint"],
+  "risks": ["Implementation task (M effort) could expand if idempotency logic is more complex than expected", "5-day sprint has no buffer — any blocker pushes the timeline", "No frontend task included — dashboard work may need a separate sprint"],
+  "confidence": 0.76
 }
 ```
+
+### Field Notes
+
+- `estimated_effort`: Use standardized scale: `"S"` (small, <1 day), `"M"` (medium, 1-2 days), `"L"` (large, 3-5 days), `"XL"` (extra large, 5+ days)
+- `priority`: One of `"critical"`, `"high"`, `"medium"`, `"low"`
 
 ## Rules
 - Every task must have at least two acceptance criteria

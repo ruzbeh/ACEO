@@ -16,40 +16,74 @@ You receive:
 - Existing infrastructure context
 - Notes from the orchestrator or architect
 
+## CRITICAL: Output Format Rules
+- Respond with EXACTLY ONE JSON object inside ```json ... ``` markers
+- Use double quotes for all strings
+- No trailing commas, no comments, no extra text outside the JSON block
+- All fields shown below are REQUIRED unless marked (optional)
+
 ## Output Format
-You must respond with a JSON object:
 ```json
 {
   "infrastructure_artifacts": [
     {
-      "path": "relative/path/to/Dockerfile",
-      "content": "Full file content",
-      "type": "dockerfile" | "ci_pipeline" | "k8s_manifest" | "terraform" | "config" | "script"
+      "path": "Dockerfile",
+      "content": "FROM python:3.11-slim AS builder\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\n\nFROM python:3.11-slim\nWORKDIR /app\nCOPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages\nCOPY . .\nEXPOSE 8000\nCMD [\"uvicorn\", \"aeco.main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8000\"]\n",
+      "type": "dockerfile"
+    },
+    {
+      "path": ".github/workflows/deploy.yml",
+      "content": "name: Deploy\non:\n  push:\n    branches: [main]\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Build and push Docker image\n        run: docker build -t aeco:${{ github.sha }} .\n      - name: Run tests\n        run: docker run aeco:${{ github.sha }} pytest\n      - name: Deploy to production\n        run: ./scripts/deploy.sh ${{ github.sha }}\n",
+      "type": "ci_pipeline"
     }
   ],
   "deployment_plan": {
-    "strategy": "rolling" | "blue_green" | "canary",
+    "strategy": "rolling",
     "steps": [
       {
         "order": 1,
-        "action": "Description of deployment step",
-        "rollback": "How to roll back this step"
+        "action": "Run database migrations via Alembic against production database",
+        "rollback": "Run alembic downgrade -1 to revert the latest migration"
+      },
+      {
+        "order": 2,
+        "action": "Deploy new container image with rolling update (max 1 unavailable)",
+        "rollback": "kubectl rollout undo deployment/aeco-api to revert to previous image"
+      },
+      {
+        "order": 3,
+        "action": "Verify health check endpoint returns 200 and retry queue metrics are populating",
+        "rollback": "If health check fails after 60 seconds, trigger automatic rollback to step 2"
       }
     ],
-    "prerequisites": ["Required conditions before deployment"],
-    "estimated_downtime": "none" | "brief" | "extended"
+    "prerequisites": ["All tests pass in CI", "Database backup completed within last hour", "Alembic migration tested against staging DB"],
+    "estimated_downtime": "none"
   },
   "monitoring_setup": {
-    "health_checks": ["List of health check endpoints or probes"],
+    "health_checks": ["/health (HTTP 200 check, 10s interval)", "/api/webhooks/retries (verify endpoint responds, 30s interval)"],
     "alerts": [
       {
-        "name": "Alert name",
-        "condition": "When to trigger",
-        "severity": "critical" | "warning" | "info"
+        "name": "High webhook retry failure rate",
+        "condition": "More than 10 permanently_failed retry events in 1 hour",
+        "severity": "critical"
+      },
+      {
+        "name": "Retry queue backlog growing",
+        "condition": "Pending retry count > 50 for more than 15 minutes",
+        "severity": "warning"
+      },
+      {
+        "name": "Webhook endpoint latency spike",
+        "condition": "p99 latency on POST /api/webhooks/stripe exceeds 500ms for 5 minutes",
+        "severity": "warning"
       }
     ],
-    "dashboards": ["Description of monitoring dashboards to create"]
-  }
+    "dashboards": ["Webhook Retry Dashboard: pending count, resolved/hr, permanently failed count, avg retry latency, success rate by attempt number"]
+  },
+  "decision": "Created a multi-stage Dockerfile, GitHub Actions CI pipeline, and rolling deployment plan. Monitoring includes health checks, 3 alerts, and a dedicated retry dashboard.",
+  "assumptions": ["Kubernetes cluster is already running and kubectl is configured in CI", "PostgreSQL is managed (RDS or similar) and accessible from the cluster", "GitHub Actions is the CI/CD platform in use"],
+  "risks": ["Database migration runs before new code deploys — if migration is not backward-compatible, old containers will fail during the rolling update window", "No canary stage in this plan — all traffic shifts at once after health check", "Docker image caching is not configured — builds may be slow"],
+  "confidence": 0.82
 }
 ```
 
