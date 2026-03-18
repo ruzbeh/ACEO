@@ -22,6 +22,11 @@ import {
   Users,
   Briefcase,
   AlertTriangle,
+  TrendingUp,
+  Megaphone,
+  PenTool,
+  Heart,
+  DollarSign,
 } from 'lucide-react';
 import type { AgentResponse } from '../api/types';
 import { cn } from '../lib/utils';
@@ -76,6 +81,14 @@ const ORG_STRUCTURE = {
     agents: ['analytics_agent', 'budget_controller', 'agent_evaluator', 'experiment_agent', 'release_manager', 'postmortem_writer'],
     description: 'Metrics, budget governance, evaluation, experimentation, release, retrospectives',
   },
+  marketing: {
+    label: 'Marketing & Growth',
+    color: 'border-pink-500/40 bg-pink-500/5',
+    badgeColor: 'bg-pink-500/20 text-pink-400',
+    icon: TrendingUp,
+    agents: ['growth_marketing', 'content_creator', 'customer_success', 'revenue_analyst'],
+    description: 'Facebook Ads, content creation, customer retention, revenue analytics',
+  },
 } as const;
 
 const WORKFLOW_LAYERS = [
@@ -125,6 +138,10 @@ const AGENT_ICONS: Record<string, typeof Crown> = {
   experiment_agent: TestTube,
   release_manager: GitBranch,
   postmortem_writer: FileText,
+  growth_marketing: Megaphone,
+  content_creator: PenTool,
+  customer_success: Heart,
+  revenue_analyst: DollarSign,
 };
 
 function AgentNode({ agent, badgeColor }: { agent: AgentResponse; badgeColor: string }) {
@@ -310,6 +327,22 @@ export function CompanyPage() {
               .filter(Boolean) as AgentResponse[];
             return <DepartmentCard key={key} dept={dept} agents={deptAgents} />;
           })}
+        </div>
+
+        {/* Reporting line */}
+        <div className="flex justify-center my-4">
+          <div className="h-8 w-px bg-border" />
+        </div>
+
+        {/* Marketing & Growth row */}
+        <div className="mx-auto max-w-2xl">
+          {(() => {
+            const dept = ORG_STRUCTURE.marketing;
+            const deptAgents = dept.agents
+              .map((id) => agentMap.get(id))
+              .filter(Boolean) as AgentResponse[];
+            return <DepartmentCard dept={dept} agents={deptAgents} />;
+          })()}
         </div>
       </section>
     </div>

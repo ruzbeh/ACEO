@@ -16,8 +16,20 @@ from aeco.tools.clickup_tools import (
     clickup_update_task,
 )
 from aeco.tools.code_tools import code_execute
+from aeco.tools.facebook_tools import (
+    facebook_create_campaign,
+    facebook_get_campaigns,
+    facebook_get_insights,
+    facebook_update_campaign,
+)
 from aeco.tools.file_tools import file_read, file_write
 from aeco.tools.gateway import ToolGateway
+from aeco.tools.stripe_tools import (
+    stripe_get_churn,
+    stripe_get_customers,
+    stripe_get_mrr,
+    stripe_get_revenue,
+)
 
 
 def register_all_tools(gateway: ToolGateway) -> None:
@@ -33,6 +45,16 @@ def register_all_tools(gateway: ToolGateway) -> None:
     gateway.register("budget_update", budget_update, {"budget:write"})
     gateway.register("metrics_read", metrics_read, {"metrics:read"})
     gateway.register("agent_logs_read", agent_logs_read, {"agent_logs:read"})
+    # Facebook/Meta Ads
+    gateway.register("facebook_get_campaigns", facebook_get_campaigns, {"facebook:read"})
+    gateway.register("facebook_get_insights", facebook_get_insights, {"facebook:read"})
+    gateway.register("facebook_update_campaign", facebook_update_campaign, {"facebook:write"})
+    gateway.register("facebook_create_campaign", facebook_create_campaign, {"facebook:write"})
+    # Stripe
+    gateway.register("stripe_get_mrr", stripe_get_mrr, {"stripe:read"})
+    gateway.register("stripe_get_revenue", stripe_get_revenue, {"stripe:read"})
+    gateway.register("stripe_get_churn", stripe_get_churn, {"stripe:read"})
+    gateway.register("stripe_get_customers", stripe_get_customers, {"stripe:read"})
 
 
 def get_langchain_tools(

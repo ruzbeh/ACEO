@@ -53,10 +53,10 @@ class TestPortfolioAgentRegistration:
         assert agent.role == "executive"
         assert "budget:read" in agent.permissions
 
-    def test_total_agent_count_is_19(self):
+    def test_total_agent_count_is_23(self):
         reg = AgentRegistry()
         reg.load_from_yaml(Path("aeco/agents/definitions/v1_agents.yaml"))
-        assert len(reg.list_agents()) == 19
+        assert len(reg.list_agents()) == 23
 
 
 # --- Graph compilation test ---

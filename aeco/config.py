@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     # Initiative workflow: max seconds per task so one agent can't hang the whole run
     initiative_task_timeout_seconds: int = 600
 
+    # Facebook/Meta Ads API
+    facebook_access_token: Optional[str] = None
+    facebook_ad_account_id: str = ""
+
+    # Stripe API
+    stripe_api_key: Optional[str] = None
+
     # App
     workspace_path: str = "./workspace"
     log_level: str = "INFO"
