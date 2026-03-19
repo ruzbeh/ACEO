@@ -2,6 +2,7 @@ agents:
   - agent_id: coo_orchestrator
     name: COO Orchestrator
     role: orchestrator
+    department: operations
     system_prompt_path: aeco/agents/prompts/coo_orchestrator.md
     executor: claude_code
     claude_code_config:
@@ -27,6 +28,7 @@ agents:
   - agent_id: chief_architect
     name: Chief Architect
     role: architect
+    department: engineering
     system_prompt_path: aeco/agents/prompts/chief_architect.md
     executor: langchain
     claude_code_config:
@@ -58,6 +60,7 @@ agents:
   - agent_id: backend_engineer
     name: Backend Engineer
     role: engineer
+    department: engineering
     system_prompt_path: aeco/agents/prompts/backend_engineer.md
     executor: langchain
     claude_code_config:
@@ -89,6 +92,7 @@ agents:
   - agent_id: qa_engineer
     name: QA Engineer
     role: qa
+    department: engineering
     system_prompt_path: aeco/agents/prompts/qa_engineer.md
     executor: langchain
     claude_code_config:
@@ -122,6 +126,7 @@ agents:
   - agent_id: program_manager
     name: Program Manager
     role: planner
+    department: product
     system_prompt_path: aeco/agents/prompts/program_manager.md
     executor: claude_code
     claude_code_config:
@@ -149,6 +154,7 @@ agents:
   - agent_id: frontend_engineer
     name: Frontend Engineer
     role: engineer
+    department: engineering
     system_prompt_path: aeco/agents/prompts/frontend_engineer.md
     executor: langchain
     claude_code_config:
@@ -180,6 +186,7 @@ agents:
   - agent_id: devops_engineer
     name: DevOps Engineer
     role: infrastructure
+    department: engineering
     system_prompt_path: aeco/agents/prompts/devops_engineer.md
     executor: claude_code
     claude_code_config:
@@ -213,6 +220,7 @@ agents:
   - agent_id: analytics_agent
     name: Analytics Agent
     role: analytics
+    department: operations
     system_prompt_path: aeco/agents/prompts/analytics_agent.md
     executor: claude_code
     claude_code_config:
@@ -241,6 +249,7 @@ agents:
   - agent_id: budget_controller
     name: Budget Controller
     role: finance
+    department: operations
     system_prompt_path: aeco/agents/prompts/budget_controller.md
     executor: claude_code
     claude_code_config:
@@ -269,6 +278,7 @@ agents:
   - agent_id: pm_agent
     name: Product Manager
     role: product_manager
+    department: product
     system_prompt_path: aeco/agents/prompts/pm_agent.md
     executor: langchain
     claude_code_config:
@@ -295,6 +305,7 @@ agents:
   - agent_id: task_planner
     name: Task Planner
     role: planner
+    department: product
     system_prompt_path: aeco/agents/prompts/task_planner.md
     executor: langchain
     claude_code_config:
@@ -323,6 +334,7 @@ agents:
   - agent_id: agent_evaluator
     name: Evaluator
     role: evaluator
+    department: operations
     system_prompt_path: aeco/agents/prompts/agent_evaluator.md
     executor: langchain
     claude_code_config:
@@ -351,6 +363,7 @@ agents:
   - agent_id: release_manager
     name: Release Manager
     role: release
+    department: engineering
     system_prompt_path: aeco/agents/prompts/release_manager.md
     executor: langchain
     claude_code_config:
@@ -380,6 +393,7 @@ agents:
   - agent_id: security_reviewer
     name: Security Reviewer
     role: security
+    department: operations
     system_prompt_path: aeco/agents/prompts/security_reviewer.md
     executor: langchain
     claude_code_config:
@@ -406,6 +420,7 @@ agents:
   - agent_id: postmortem_writer
     name: Postmortem Writer
     role: postmortem
+    department: operations
     system_prompt_path: aeco/agents/prompts/postmortem_writer.md
     executor: langchain
     claude_code_config:
@@ -434,6 +449,7 @@ agents:
   - agent_id: product_strategist
     name: Product Strategist
     role: strategist
+    department: executive
     system_prompt_path: aeco/agents/prompts/product_strategist.md
     executor: langchain
     claude_code_config:
@@ -460,6 +476,7 @@ agents:
   - agent_id: ceo_director
     name: CEO / Portfolio Director
     role: executive
+    department: executive
     system_prompt_path: aeco/agents/prompts/ceo_director.md
     executor: langchain
     claude_code_config:
@@ -488,6 +505,7 @@ agents:
   - agent_id: incident_investigator
     name: Incident Investigator
     role: investigator
+    department: operations
     system_prompt_path: aeco/agents/prompts/incident_investigator.md
     executor: langchain
     claude_code_config:
@@ -516,6 +534,7 @@ agents:
   - agent_id: experiment_agent
     name: Experiment Agent
     role: experimentation
+    department: product
     system_prompt_path: aeco/agents/prompts/experiment_agent.md
     executor: langchain
     claude_code_config:
@@ -546,6 +565,7 @@ agents:
   - agent_id: growth_marketing
     name: Growth Marketing Agent
     role: marketing
+    department: marketing
     system_prompt_path: aeco/agents/prompts/growth_marketing.md
     executor: langchain
     claude_code_config:
@@ -574,6 +594,7 @@ agents:
   - agent_id: content_creator
     name: Content Creator
     role: content
+    department: marketing
     system_prompt_path: aeco/agents/prompts/content_creator.md
     executor: langchain
     claude_code_config:
@@ -600,6 +621,7 @@ agents:
   - agent_id: customer_success
     name: Customer Success Agent
     role: customer_success
+    department: revenue
     system_prompt_path: aeco/agents/prompts/customer_success.md
     executor: langchain
     claude_code_config:
@@ -627,6 +649,7 @@ agents:
   - agent_id: revenue_analyst
     name: Revenue Analyst
     role: finance
+    department: revenue
     system_prompt_path: aeco/agents/prompts/revenue_analyst.md
     executor: langchain
     claude_code_config:
@@ -652,3 +675,331 @@ agents:
       - stripe:read
       - budget:read
       - metrics:read
+
+  # ═══════════════════════════════════════════════════════════════
+  # TEAM LEADS — route tasks to specialist team members
+  # ═══════════════════════════════════════════════════════════════
+
+  - agent_id: engineering_lead
+    name: Engineering Team Lead
+    role: team_lead
+    department: engineering
+    is_lead: true
+    team_members: [backend_engineer, frontend_engineer, devops_engineer, database_engineer, api_engineer, infra_engineer, fullstack_engineer]
+    system_prompt_path: aeco/agents/prompts/engineering_lead.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.2
+      max_tokens: 1024
+    tools: []
+    permissions: []
+
+  - agent_id: marketing_lead
+    name: Marketing Team Lead
+    role: team_lead
+    department: marketing
+    is_lead: true
+    team_members: [growth_marketing, content_creator, facebook_ads_specialist, email_marketer, seo_specialist, landing_page_designer]
+    system_prompt_path: aeco/agents/prompts/marketing_lead.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.2
+      max_tokens: 1024
+    tools: []
+    permissions: []
+
+  - agent_id: product_lead
+    name: Product Team Lead
+    role: team_lead
+    department: product
+    is_lead: true
+    team_members: [pm_agent, task_planner, ux_researcher, data_analyst, product_designer]
+    system_prompt_path: aeco/agents/prompts/product_lead.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.2
+      max_tokens: 1024
+    tools: []
+    permissions: []
+
+  - agent_id: revenue_lead
+    name: Revenue & Customer Team Lead
+    role: team_lead
+    department: revenue
+    is_lead: true
+    team_members: [customer_success, revenue_analyst, pricing_analyst, retention_specialist, onboarding_specialist]
+    system_prompt_path: aeco/agents/prompts/revenue_lead.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.2
+      max_tokens: 1024
+    tools: []
+    permissions: []
+
+  - agent_id: operations_lead
+    name: Operations Team Lead
+    role: team_lead
+    department: operations
+    is_lead: true
+    team_members: [coo_orchestrator, budget_controller, security_reviewer, compliance_reviewer, cost_optimizer]
+    system_prompt_path: aeco/agents/prompts/operations_lead.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.2
+      max_tokens: 1024
+    tools: []
+    permissions: []
+
+  # ═══════════════════════════════════════════════════════════════
+  # SPECIALIST AGENTS — Engineering
+  # ═══════════════════════════════════════════════════════════════
+
+  - agent_id: database_engineer
+    name: Database Engineer
+    role: engineer
+    department: engineering
+    system_prompt_path: aeco/agents/prompts/database_engineer.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.3
+      max_tokens: 8192
+    tools: [file_write, file_read, code_execute]
+    permissions: [workspace:write, workspace:read, code:execute]
+
+  - agent_id: api_engineer
+    name: API Engineer
+    role: engineer
+    department: engineering
+    system_prompt_path: aeco/agents/prompts/api_engineer.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.4
+      max_tokens: 8192
+    tools: [file_write, file_read, code_execute]
+    permissions: [workspace:write, workspace:read, code:execute]
+
+  - agent_id: infra_engineer
+    name: Infrastructure Engineer
+    role: engineer
+    department: engineering
+    system_prompt_path: aeco/agents/prompts/infra_engineer.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.3
+      max_tokens: 4096
+    tools: [file_write, file_read, code_execute]
+    permissions: [workspace:write, workspace:read, code:execute]
+
+  - agent_id: fullstack_engineer
+    name: Fullstack Engineer
+    role: engineer
+    department: engineering
+    system_prompt_path: aeco/agents/prompts/fullstack_engineer.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.4
+      max_tokens: 8192
+    tools: [file_write, file_read, code_execute]
+    permissions: [workspace:write, workspace:read, code:execute]
+
+  # ═══════════════════════════════════════════════════════════════
+  # SPECIALIST AGENTS — Marketing
+  # ═══════════════════════════════════════════════════════════════
+
+  - agent_id: facebook_ads_specialist
+    name: Facebook Ads Specialist
+    role: marketing
+    department: marketing
+    system_prompt_path: aeco/agents/prompts/facebook_ads_specialist.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.4
+      max_tokens: 4096
+    tools: [facebook_get_campaigns, facebook_get_insights, facebook_update_campaign, facebook_create_campaign, metrics_read]
+    permissions: [facebook:read, facebook:write, metrics:read]
+
+  - agent_id: email_marketer
+    name: Email Marketer
+    role: marketing
+    department: marketing
+    system_prompt_path: aeco/agents/prompts/email_marketer.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.6
+      max_tokens: 4096
+    tools: [file_write, file_read, metrics_read]
+    permissions: [workspace:write, workspace:read, metrics:read]
+
+  - agent_id: seo_specialist
+    name: SEO Specialist
+    role: marketing
+    department: marketing
+    system_prompt_path: aeco/agents/prompts/seo_specialist.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.4
+      max_tokens: 4096
+    tools: [file_read, metrics_read]
+    permissions: [workspace:read, metrics:read]
+
+  - agent_id: landing_page_designer
+    name: Landing Page Designer
+    role: marketing
+    department: marketing
+    system_prompt_path: aeco/agents/prompts/landing_page_designer.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.6
+      max_tokens: 4096
+    tools: [file_write, file_read, metrics_read]
+    permissions: [workspace:write, workspace:read, metrics:read]
+
+  # ═══════════════════════════════════════════════════════════════
+  # SPECIALIST AGENTS — Product
+  # ═══════════════════════════════════════════════════════════════
+
+  - agent_id: ux_researcher
+    name: UX Researcher
+    role: product
+    department: product
+    system_prompt_path: aeco/agents/prompts/ux_researcher.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.5
+      max_tokens: 4096
+    tools: [metrics_read, agent_logs_read]
+    permissions: [metrics:read, agent_logs:read]
+
+  - agent_id: data_analyst
+    name: Data Analyst
+    role: product
+    department: product
+    system_prompt_path: aeco/agents/prompts/data_analyst.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.2
+      max_tokens: 4096
+    tools: [metrics_read, stripe_get_mrr, stripe_get_revenue, stripe_get_churn, stripe_get_customers]
+    permissions: [metrics:read, stripe:read]
+
+  - agent_id: product_designer
+    name: Product Designer
+    role: product
+    department: product
+    system_prompt_path: aeco/agents/prompts/product_designer.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.6
+      max_tokens: 4096
+    tools: [file_write, file_read]
+    permissions: [workspace:write, workspace:read]
+
+  # ═══════════════════════════════════════════════════════════════
+  # SPECIALIST AGENTS — Revenue & Customer
+  # ═══════════════════════════════════════════════════════════════
+
+  - agent_id: pricing_analyst
+    name: Pricing Analyst
+    role: finance
+    department: revenue
+    system_prompt_path: aeco/agents/prompts/pricing_analyst.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.2
+      max_tokens: 4096
+    tools: [stripe_get_mrr, stripe_get_revenue, stripe_get_customers, metrics_read]
+    permissions: [stripe:read, metrics:read]
+
+  - agent_id: retention_specialist
+    name: Retention Specialist
+    role: customer_success
+    department: revenue
+    system_prompt_path: aeco/agents/prompts/retention_specialist.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.3
+      max_tokens: 4096
+    tools: [stripe_get_churn, stripe_get_customers, metrics_read]
+    permissions: [stripe:read, metrics:read]
+
+  - agent_id: onboarding_specialist
+    name: Onboarding Specialist
+    role: customer_success
+    department: revenue
+    system_prompt_path: aeco/agents/prompts/onboarding_specialist.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.4
+      max_tokens: 4096
+    tools: [metrics_read, agent_logs_read]
+    permissions: [metrics:read, agent_logs:read]
+
+  # ═══════════════════════════════════════════════════════════════
+  # SPECIALIST AGENTS — Operations
+  # ═══════════════════════════════════════════════════════════════
+
+  - agent_id: compliance_reviewer
+    name: Compliance Reviewer
+    role: compliance
+    department: operations
+    system_prompt_path: aeco/agents/prompts/compliance_reviewer.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.2
+      max_tokens: 4096
+    tools: [file_read, metrics_read]
+    permissions: [workspace:read, metrics:read]
+
+  - agent_id: cost_optimizer
+    name: Cost Optimizer
+    role: finance
+    department: operations
+    system_prompt_path: aeco/agents/prompts/cost_optimizer.md
+    executor: langchain
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.2
+      max_tokens: 4096
+    tools: [budget_read, metrics_read]
+    permissions: [budget:read, metrics:read]

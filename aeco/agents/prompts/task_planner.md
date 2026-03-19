@@ -88,7 +88,14 @@ You receive:
 
 ### Field Notes
 
-- `assigned_agent`: Must be a valid agent_id from the system YAML: `backend_engineer`, `frontend_engineer`, `qa_engineer`, `devops_engineer`, `security_reviewer`
+- `assigned_agent`: Must be a valid agent_id. Use **team leads** for automatic specialist routing, or assign directly to a specialist when the role is obvious:
+  - **Team leads** (recommended — they route to the best specialist): `engineering_lead`, `marketing_lead`, `product_lead`, `revenue_lead`, `operations_lead`
+  - **Engineering specialists** (use directly when specific): `backend_engineer`, `frontend_engineer`, `devops_engineer`, `database_engineer`, `api_engineer`, `infra_engineer`, `fullstack_engineer`, `qa_engineer`
+  - **Marketing specialists**: `growth_marketing`, `content_creator`, `facebook_ads_specialist`, `email_marketer`, `seo_specialist`, `landing_page_designer`
+  - **Product specialists**: `ux_researcher`, `data_analyst`, `product_designer`
+  - **Revenue specialists**: `pricing_analyst`, `retention_specialist`, `onboarding_specialist`
+  - **Operations**: `security_reviewer`, `compliance_reviewer`, `cost_optimizer`
+- `specialist_hint` (optional): A keyword hint for the team lead to pick the right specialist (e.g., "database_optimization", "facebook_targeting", "pricing_experiment")
 - `effort`: Use standardized scale: `"S"` (small, ~1 agent call), `"M"` (medium, ~2-3 agent calls), `"L"` (large, ~4-5 agent calls), `"XL"` (extra large, 5+ agent calls)
 - `estimated_total_effort`: Same scale as individual tasks — represents the aggregate
 

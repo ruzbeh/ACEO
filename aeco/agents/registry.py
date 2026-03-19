@@ -36,6 +36,33 @@ class AgentRegistry:
     def register(self, agent: AgentDefinition) -> None:
         self._agents[agent.agent_id] = agent
 
+    def get_team_members(self, lead_id: str) -> list[AgentDefinition]:
+        """Get all specialist agents managed by a team lead."""
+        lead = self.get(lead_id)
+        if not lead.team_members:
+            return []
+        return [self._agents[mid] for mid in lead.team_members if mid in self._agents]
+
+    def get_departments(self) -> dict[str, dict]:
+        """Get department → {lead, members} tree for UI."""
+        departments: dict[str, dict] = {}
+        for agent in self._agents.values():
+            dept = agent.department or "unassigned"
+            if dept not in departments:
+                departments[dept] = {"lead": None, "members": []}
+            if agent.is_lead:
+                departments[dept]["lead"] = agent
+            else:
+                departments[dept]["members"].append(agent)
+        return departments
+
+    def is_team_lead(self, agent_id: str) -> bool:
+        """Check if an agent is a team lead with members."""
+        if agent_id not in self._agents:
+            return False
+        agent = self._agents[agent_id]
+        return agent.is_lead and bool(agent.team_members)
+
 
 # Global registry instance
 registry = AgentRegistry()

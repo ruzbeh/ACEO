@@ -61,6 +61,55 @@ class InitiativeNodes:
         self.budget = budget_engine
 
     # ------------------------------------------------------------------
+    # team delegation: route task to best specialist
+    # ------------------------------------------------------------------
+
+    async def _delegate_to_specialist(
+        self, lead_id: str, task_title: str, task_desc: str, specialist_hint: str = ""
+    ) -> str | None:
+        """Ask a team lead to pick the best specialist for a task.
+
+        Returns the specialist agent_id, or None if delegation fails.
+        """
+        try:
+            lead_def = self.registry.get(lead_id)
+            runtime = create_executor(lead_def, self.audit)
+
+            members = self.registry.get_team_members(lead_id)
+            member_info = [
+                {"agent_id": m.agent_id, "name": m.name, "role": m.role}
+                for m in members
+            ]
+
+            context = {
+                "action": "delegate",
+                "task_title": task_title,
+                "task_description": task_desc,
+                "specialist_hint": specialist_hint,
+                "available_specialists": member_info,
+            }
+
+            result = await asyncio.wait_for(runtime.execute(context), timeout=60)
+            delegate_to = result.get("delegate_to", "")
+            if delegate_to and self.registry.has(delegate_to):
+                return delegate_to
+
+            # Fallback: keyword matching on role/name
+            desc_lower = (task_title + " " + task_desc + " " + specialist_hint).lower()
+            for m in members:
+                if m.role.lower() in desc_lower or m.agent_id.lower() in desc_lower:
+                    return m.agent_id
+
+            return members[0].agent_id if members else None
+        except Exception as e:
+            logger.warning(f"Team delegation failed for {lead_id}: {e}")
+            # Fallback to first team member
+            lead_def = self.registry.get(lead_id)
+            if lead_def.team_members:
+                return lead_def.team_members[0]
+            return None
+
+    # ------------------------------------------------------------------
     # intake: initialize the initiative workflow
     # ------------------------------------------------------------------
 
@@ -390,6 +439,30 @@ class InitiativeNodes:
             if not self.registry.has(agent_id):
                 logger.warning(f"Agent {agent_id} not found, falling back to backend_engineer")
                 agent_id = "backend_engineer"
+
+            # Team delegation: if assigned to a team lead, delegate to specialist
+            delegated_from = None
+            if self.registry.is_team_lead(agent_id):
+                delegated_from = agent_id
+                specialist_id = await self._delegate_to_specialist(
+                    agent_id, task_title, task_desc, task.get("specialist_hint", "")
+                )
+                if specialist_id and self.registry.has(specialist_id):
+                    logger.info(f"Team delegation: {agent_id} → {specialist_id} for '{task_title}'")
+                    results.append({
+                        "task_id": task.get("task_id", ""),
+                        "title": f"[delegation] {task_title}",
+                        "agent_id": agent_id,
+                        "status": "delegated",
+                        "output": {"delegate_to": specialist_id, "original_agent": agent_id},
+                    })
+                    agent_id = specialist_id
+                else:
+                    # Fallback: use first team member
+                    members = self.registry.get(delegated_from).team_members or []
+                    if members and self.registry.has(members[0]):
+                        agent_id = members[0]
+                        logger.info(f"Team fallback: {delegated_from} → {agent_id}")
 
             agent_def = self.registry.get(agent_id)
             runtime = create_executor(agent_def, self.audit)

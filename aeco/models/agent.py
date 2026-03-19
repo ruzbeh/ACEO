@@ -28,3 +28,7 @@ class AgentDefinition(BaseModel):
     permissions: List[str] = []
     executor: Literal["langchain", "claude_code"] = "langchain"
     claude_code_config: Optional[ClaudeCodeConfig] = None
+    # Team structure
+    department: Optional[str] = None          # e.g., "engineering", "marketing"
+    is_lead: bool = False                     # True for team leads
+    team_members: Optional[List[str]] = None  # agent_ids of specialists this lead manages
