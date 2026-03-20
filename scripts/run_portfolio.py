@@ -52,6 +52,10 @@ async def main(args):
         console=settings.company_log_console,
     )
 
+    # Initialize database tables
+    from aeco.db.session import init_db
+    await init_db()
+
     # Register tools and load agents
     register_all_tools(tool_gateway)
     registry = AgentRegistry()

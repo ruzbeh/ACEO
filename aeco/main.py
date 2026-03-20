@@ -123,6 +123,11 @@ async def _mark_stale_portfolios_failed() -> None:
 async def lifespan(app: FastAPI):
     """Initialize the system on startup."""
     logger.info("Starting AECO...")
+
+    # Create DB tables if they don't exist
+    from aeco.db.session import init_db
+    await init_db()
+
     await _mark_stale_runs_failed()
     await _mark_stale_portfolios_failed()
 
