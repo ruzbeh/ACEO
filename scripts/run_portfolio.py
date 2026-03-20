@@ -132,38 +132,73 @@ async def main(args):
     final_state = await portfolio_graph.ainvoke(initial_state)
 
     # Print results
-    print("\n" + "=" * 60)
-    print("PORTFOLIO RUN COMPLETE")
-    print("=" * 60)
-    print(f"Cycles:           {final_state.get('cycle_count', 0)}")
-    print(f"Budget spent:     ${final_state.get('budget_spent', 0):.2f}")
-    print(f"Budget remaining: ${final_state.get('budget_remaining', 0):.2f}")
-    print(f"Opportunities:    {len(final_state.get('opportunities', []))}")
+    print("\n" + "=" * 70)
+    print("  PORTFOLIO RUN COMPLETE")
+    print("=" * 70)
+    print(f"  Cycles:           {final_state.get('cycle_count', 0)}")
+    print(f"  Budget spent:     ${final_state.get('budget_spent', 0):.2f}")
+    print(f"  Budget remaining: ${final_state.get('budget_remaining', 0):.2f}")
 
+    # Opportunities discovered
+    opportunities = final_state.get("opportunities", [])
+    print(f"\n  📊 Opportunities discovered: {len(opportunities)}")
+    for i, opp in enumerate(opportunities):
+        print(f"    {i+1}. {opp.get('title', '?')} [{opp.get('category', '?')}] "
+              f"(confidence: {opp.get('confidence', 0):.0%})")
+        if opp.get("goal"):
+            print(f"       Goal: {opp['goal'][:100]}")
+
+    # Initiatives executed
     results = final_state.get("execution_results", [])
-    print(f"Initiatives run:  {len(results)}")
-
+    print(f"\n  🚀 Initiatives executed: {len(results)}")
     for r in results:
         status = r.get("action", "unknown")
         verdict = r.get("verdict", "")
         title = r.get("title", "Untitled")
-        icon = {"completed": "✓", "failed": "✗", "timeout": "⏱", "killed": "☠"}.get(status, "?")
+        icon = {"completed": "✓", "failed": "✗", "timeout": "⏱", "killed": "☠", "skipped": "⊘"}.get(status, "?")
         verdict_str = f" → {verdict}" if verdict else ""
-        print(f"  {icon} {title} ({status}{verdict_str})")
+        print(f"    {icon} {title} ({status}{verdict_str})")
+        if r.get("tasks_executed"):
+            print(f"       Tasks: {r['tasks_executed']}, Budget: ${r.get('budget_spent', 0):.2f}")
+        if r.get("prd"):
+            prd = r["prd"]
+            if isinstance(prd, dict):
+                print(f"       PRD: {prd.get('problem_statement', '')[:120]}")
+        if r.get("task_graph"):
+            print(f"       Task graph: {len(r['task_graph'])} tasks")
 
+    # Portfolio decisions
     decisions = final_state.get("portfolio_decisions", [])
     if decisions:
-        print(f"\nPortfolio decisions: {len(decisions)}")
-        for d in decisions[-3:]:
-            print(f"  - {d.get('agent', '?')}: {d.get('reasoning', d.get('decision', ''))[:100]}")
+        print(f"\n  📋 Portfolio decisions: {len(decisions)}")
+        for d in decisions[-5:]:
+            agent = d.get("agent", "?")
+            reasoning = d.get("reasoning", d.get("decision", ""))
+            if isinstance(reasoning, dict):
+                reasoning = json.dumps(reasoning)
+            print(f"    - {agent}: {str(reasoning)[:120]}")
 
+    # Errors
     errors = final_state.get("errors", [])
     if errors:
-        print(f"\nErrors: {len(errors)}")
+        print(f"\n  ⚠️  Errors: {len(errors)}")
         for e in errors:
-            print(f"  ⚠ {e}")
+            print(f"    ⚠ {e[:150]}")
 
-    print("=" * 60)
+    # Messages summary
+    messages = final_state.get("messages", [])
+    agent_calls = [m for m in messages if m.get("type") == "agent_call"]
+    parse_errors = [m for m in messages if "parse_error" in m.get("type", "")]
+    print(f"\n  📝 Message log: {len(messages)} messages, {len(agent_calls)} agent calls, {len(parse_errors)} parse errors")
+
+    print("=" * 70)
+
+    # Save full state to file for debugging
+    output_path = Path("logs/last_portfolio_run.json")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(final_state, f, indent=2, default=str)
+    print(f"\n  Full state saved to: {output_path}")
 
 
 if __name__ == "__main__":

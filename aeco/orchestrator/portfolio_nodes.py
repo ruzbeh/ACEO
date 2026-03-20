@@ -17,6 +17,7 @@ from aeco.agents.registry import AgentRegistry
 from aeco.audit.logger import AuditLogger
 from aeco.config import settings
 from aeco.context.builder import ContextBuilder
+from aeco.workspace_scanner.scanner import scan_workspace
 from aeco.events import (
     PORTFOLIO_CLOSED,
     PORTFOLIO_CYCLE_STARTED,
@@ -86,10 +87,59 @@ class PortfolioNodes:
     # opportunity_scan: Product Strategist discovers opportunities
     # ------------------------------------------------------------------
 
+    def _build_product_context(self, workspace_path: str) -> dict:
+        """Scan workspace to build product context for agents."""
+        try:
+            ctx = scan_workspace(workspace_path)
+            logger.info(
+                f"Product context: {ctx.get('product_name', '?')}, "
+                f"stack={ctx.get('tech_stack', [])}, files={ctx.get('file_count', 0)}"
+            )
+            return ctx
+        except Exception as e:
+            logger.warning(f"Workspace scan failed: {e}")
+            return {"product_name": "Unknown", "error": str(e)}
+
+    async def _call_product_strategist(
+        self, context: dict, messages: list
+    ) -> tuple[dict, list, str | None]:
+        """Call product strategist and return (result, opportunities, parse_err)."""
+        agent_def = self.registry.get("product_strategist")
+        runtime = create_executor(agent_def, self.audit)
+
+        messages.append(_msg("system", "agent_call", {
+            "agent": "product_strategist",
+            "action": "Calling Product Strategist to discover opportunities...",
+            "context_keys": list(context.keys()),
+        }))
+
+        result = await runtime.execute(context)
+
+        parse_err = _check_parse_error(result, "product_strategist")
+        opportunities = []
+
+        if parse_err:
+            logger.warning(parse_err)
+            messages.append(_msg("product_strategist", "parse_error", {
+                "error": parse_err,
+                "raw_preview": result.get("raw_response", "")[:500],
+            }))
+        else:
+            opportunities = result.get("opportunities", [])
+            messages.append(_msg("product_strategist", "response", {
+                "opportunities_found": len(opportunities),
+                "decision": result.get("decision", ""),
+                "portfolio_gaps": result.get("portfolio_gaps", []),
+                "confidence": result.get("confidence", 0),
+            }))
+
+        return result, opportunities, parse_err
+
     async def opportunity_scan(self, state: PortfolioState) -> dict:
         cycle = state.get("cycle_count", 0)
         goals = state.get("company_goals", [])
         budget_remaining = state.get("budget_remaining", 0)
+        workspace_path = state.get("workspace_path", settings.workspace_path)
 
         logger.info(f"Portfolio cycle {cycle}: scanning for opportunities")
 
@@ -107,15 +157,19 @@ class PortfolioNodes:
             "cycle": cycle,
         })
 
+        # ── NEW: Scan workspace to build product context ──
+        product_context = self._build_product_context(workspace_path)
+        messages.append(_msg("system", "workspace_scanned", {
+            "product_name": product_context.get("product_name", "?"),
+            "tech_stack": product_context.get("tech_stack", []),
+            "file_count": product_context.get("file_count", 0),
+        }))
+
         result = {}
         opportunities = []
         parse_err = None
 
-        # Call the Product Strategist agent
         try:
-            agent_def = self.registry.get("product_strategist")
-            runtime = create_executor(agent_def, self.audit)
-
             recent_outcomes = []
             for init in state.get("active_initiatives", []):
                 if init.get("verdict"):
@@ -125,39 +179,59 @@ class PortfolioNodes:
                         "budget_spent": init.get("budget_spent", 0),
                     })
 
+            # ── CRITICAL: Include product context so the agent knows what the product IS ──
             context = {
                 "company_goals": goals,
+                "product_context": {
+                    "product_name": product_context.get("product_name", "Unknown"),
+                    "product_description": product_context.get("product_description", ""),
+                    "tech_stack": product_context.get("tech_stack", []),
+                    "directory_structure": product_context.get("directory_structure", "")[:1500],
+                    "has_tests": product_context.get("has_tests", False),
+                    "has_docker": product_context.get("has_docker", False),
+                    "file_count": product_context.get("file_count", 0),
+                    "key_config_files": {
+                        k: v[:500] for k, v in product_context.get("key_files", {}).items()
+                        if k in ("package.json", "pyproject.toml", "requirements.txt",
+                                 ".env.example", ".env.sample", "docker-compose.yml",
+                                 "README.md", "readme.md")
+                    },
+                },
                 "recent_outcomes": recent_outcomes,
                 "active_initiatives": state.get("active_initiatives", []),
                 "budget_remaining": budget_remaining,
                 "cycle_count": cycle,
-                "past_opportunities": state.get("opportunities", [])[-10:],
+                "past_opportunities": [
+                    {"title": o.get("title"), "category": o.get("category")}
+                    for o in state.get("opportunities", [])[-5:]
+                ],
+                "workspace_path": workspace_path,
             }
 
-            messages.append(_msg("system", "agent_call", {
-                "agent": "product_strategist",
-                "action": "Calling Product Strategist to discover opportunities...",
-                "context_keys": list(context.keys()),
-            }))
+            # ── First attempt ──
+            result, opportunities, parse_err = await self._call_product_strategist(
+                context, messages
+            )
 
-            result = await runtime.execute(context)
-
-            # Check for parse errors
-            parse_err = _check_parse_error(result, "product_strategist")
-            if parse_err:
-                logger.warning(parse_err)
-                messages.append(_msg("product_strategist", "parse_error", {
-                    "error": parse_err,
-                    "raw_preview": result.get("raw_response", "")[:500],
+            # ── RETRY: If 0 opportunities and no parse error, try once more with emphasis ──
+            if not opportunities and not parse_err:
+                logger.warning(
+                    "Product Strategist returned 0 opportunities (valid JSON but empty). "
+                    "Retrying with emphasis..."
+                )
+                messages.append(_msg("system", "retry", {
+                    "reason": "No opportunities in first attempt",
+                    "action": "Retrying with stronger emphasis on generating concrete opportunities",
                 }))
-            else:
-                opportunities = result.get("opportunities", [])
-                messages.append(_msg("product_strategist", "response", {
-                    "opportunities_found": len(opportunities),
-                    "decision": result.get("decision", ""),
-                    "portfolio_gaps": result.get("portfolio_gaps", []),
-                    "confidence": result.get("confidence", 0),
-                }))
+                context["IMPORTANT_INSTRUCTION"] = (
+                    "You MUST return at least 1-3 concrete opportunities. "
+                    "The product is real, the goals are real, the budget is available. "
+                    "Analyze the product_context and propose specific, actionable improvements. "
+                    "Do NOT return an empty opportunities array."
+                )
+                result, opportunities, parse_err = await self._call_product_strategist(
+                    context, messages
+                )
 
             # Log each opportunity
             for i, opp in enumerate(opportunities):
@@ -206,9 +280,14 @@ class PortfolioNodes:
         if not opportunities:
             err = "No opportunities discovered — the Product Strategist returned empty results."
             if parse_err:
-                err += " (Parse error: LLM response was not valid JSON)"
+                err += f" (Parse error: LLM response was not valid JSON)"
             errors.append(err)
             messages.append(_msg("system", "warning", err))
+            logger.error(
+                "CIRCUIT BREAKER: 0 opportunities after retry. "
+                "Check: (1) Is the workspace_path correct? (2) Is the LLM API key valid? "
+                "(3) Check logs/company.log for raw LLM responses."
+            )
 
         return {
             "opportunities": opportunities,
@@ -232,6 +311,32 @@ class PortfolioNodes:
         budget_remaining = state.get("budget_remaining", 0)
 
         logger.info(f"CEO: reviewing {len(opportunities)} opportunities, ${budget_remaining:.2f} remaining")
+
+        # ── CIRCUIT BREAKER: If no opportunities, skip CEO review entirely ──
+        if not opportunities:
+            logger.warning("No opportunities to review — skipping CEO review")
+            return {
+                "funded_initiatives": [],
+                "killed_initiatives": [],
+                "current_phase": "executing",
+                "portfolio_decisions": [{
+                    "agent": "ceo_director",
+                    "phase": "portfolio_review",
+                    "funded": [],
+                    "killed": [],
+                    "scaled": [],
+                    "reasoning": "No opportunities to review — Product Strategist found nothing.",
+                }],
+                "messages": [
+                    _msg("system", "phase_start", {
+                        "phase": "portfolio_review",
+                        "opportunities_count": 0,
+                        "budget_remaining": budget_remaining,
+                    }),
+                    _msg("system", "warning", "Skipped CEO review: no opportunities available."),
+                ],
+                "errors": ["No opportunities available for CEO review."],
+            }
 
         messages = [
             _msg("system", "phase_start", {
@@ -261,6 +366,11 @@ class PortfolioNodes:
                 },
                 "past_decisions": state.get("portfolio_decisions", [])[-5:],
                 "cycle_count": state.get("cycle_count", 0),
+                "IMPORTANT_INSTRUCTION": (
+                    "You MUST fund at least one opportunity if the budget allows. "
+                    "The opportunities have been vetted by the Product Strategist. "
+                    "Allocate budget and set priority for each funded initiative."
+                ),
             }
 
             messages.append(_msg("system", "agent_call", {
@@ -476,6 +586,8 @@ class PortfolioNodes:
                 continue
 
             # Build initial state for initiative graph
+            # Include product context so initiative agents know what they're working on
+            product_ctx = self._build_product_context(workspace_path)
             from aeco.orchestrator.initiative_state import InitiativeState
             init_state: InitiativeState = {
                 "initiative_id": init_id,
@@ -483,7 +595,12 @@ class PortfolioNodes:
                 "goal": goal,
                 "hypothesis": hypothesis,
                 "workspace_path": workspace_path,
-                "project_context": None,
+                "project_context": {
+                    "product_name": product_ctx.get("product_name", "Unknown"),
+                    "product_description": product_ctx.get("product_description", ""),
+                    "tech_stack": product_ctx.get("tech_stack", []),
+                    "directory_structure": product_ctx.get("directory_structure", "")[:1000],
+                },
                 "prd": None,
                 "design_document": None,
                 "security_review": None,

@@ -140,6 +140,7 @@ class InitiativeNodes:
             "title": state["title"],
             "goal": state["goal"],
             "hypothesis": state["hypothesis"],
+            "project_context": state.get("project_context"),
         }
         context = await self.ctx.build_for_initiative(
             initiative_title=state["title"],
@@ -209,6 +210,7 @@ class InitiativeNodes:
             "title": state["title"],
             "goal": state["goal"],
             "prd": state.get("prd"),
+            "project_context": state.get("project_context"),
         }
         context = await self.ctx.build_for_initiative(
             initiative_title=state["title"],

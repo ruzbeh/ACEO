@@ -8,10 +8,14 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
-from aeco.agents.response_parser import parse_agent_response
+from aeco.agents.response_parser import (
+    extract_code_artifacts_from_text,
+    parse_agent_response,
+)
 from aeco.integrations.llm.provider import LLMProviderFactory
 from aeco.logging.company_logger import (
     log_agent_end,
+    log_agent_parse_result,
     log_agent_start,
     log_agent_tool_round,
 )
@@ -55,11 +59,11 @@ class AgentRuntime:
             SystemMessage(content=self._system_prompt),
             HumanMessage(
                 content=f"Here is the current task context:\n\n{context_str}\n\n"
-                "IMPORTANT: You MUST respond with a valid JSON object wrapped in ```json ... ``` markers. "
-                "Follow the exact output format specified in your system prompt. "
-                "Do NOT include any text outside the JSON block. "
+                "IMPORTANT — Output format: Reply with exactly one JSON object inside a code block. "
+                "Use double quotes for strings, no trailing commas, no comments. "
+                "Example: ```json\n{\"key\": \"value\"}\n``` "
                 "You may use the provided tools if they help (e.g. read/write files, run code, update ClickUp). "
-                "When done, reply with ONLY the ```json ... ``` block containing your response."
+                "If you used tools, you must still end your reply with a single ```json ... ``` block. When done, output ONLY that block; no other text before or after."
             ),
         ]
 
@@ -121,15 +125,84 @@ class AgentRuntime:
                 response = await self.provider.invoke(messages)
             duration_ms = int((time.monotonic() - start_time) * 1000)
             raw_content = response.content if hasattr(response, "content") else str(response)
+            if not isinstance(raw_content, str):
+                raw_content = str(raw_content) if raw_content else ""
             result = self._parse_response(raw_content)
 
-            # If parse failed, log it prominently and include the raw response
+            # On parse failure: retry once with a focused JSON-only prompt
             if result.get("parse_error"):
                 import logging as _log
-                _logger = _log.getLogger(__name__)
-                _logger.warning(
-                    f"[{self.agent_def.agent_id}] LLM response did not parse as JSON. "
-                    f"Raw ({len(raw_content)} chars): {raw_content[:300]}"
+                _log.getLogger(__name__).warning(
+                    "[%s] LLM response did not parse as JSON (%d chars). Retrying with JSON-only prompt...",
+                    self.agent_def.agent_id,
+                    len(raw_content),
+                )
+                retry_messages = [
+                    SystemMessage(content=self._system_prompt),
+                    HumanMessage(content=(
+                        "Your previous response could not be parsed as JSON. "
+                        "Here is what you said:\n\n"
+                        f"{raw_content[:3000]}\n\n"
+                        "Please reformat your answer as ONLY a JSON object inside ```json ... ``` markers. "
+                        "No other text before or after. Just the JSON block."
+                    )),
+                ]
+                try:
+                    retry_response = await self.provider.invoke(retry_messages)
+                    retry_content = retry_response.content if hasattr(retry_response, "content") else str(retry_response)
+                    if not isinstance(retry_content, str):
+                        retry_content = str(retry_content) if retry_content else ""
+                    retry_result = self._parse_response(retry_content)
+                    if not retry_result.get("parse_error"):
+                        _log.getLogger(__name__).info(
+                            "[%s] Retry succeeded — got valid JSON on second attempt.",
+                            self.agent_def.agent_id,
+                        )
+                        result = retry_result
+                        raw_content = retry_content
+                except Exception as retry_err:
+                    _log.getLogger(__name__).warning(
+                        "[%s] Retry also failed: %s", self.agent_def.agent_id, retry_err
+                    )
+
+            # If still a parse failure after retry: build fallback but KEEP parse_error flag
+            if result.get("parse_error"):
+                import logging as _log
+                _log.getLogger(__name__).error(
+                    "[%s] PARSE FAILED after retry (%d chars). Raw preview:\n%s",
+                    self.agent_def.agent_id,
+                    len(raw_content),
+                    raw_content[:1500],
+                )
+                code_artifacts = extract_code_artifacts_from_text(
+                    result.get("raw_response") or raw_content
+                )
+                summary = (result.get("raw_response") or raw_content or "").strip()[:500]
+                result = {
+                    "parse_error": True,
+                    "raw_response": raw_content[:2000],
+                    "decision": summary or "Task completed; no valid JSON summary returned.",
+                    "code_artifacts": code_artifacts,
+                    "assumptions": [],
+                    "risks": [],
+                    "confidence": 0.5,
+                }
+                log_agent_parse_result(
+                    agent_id=self.agent_def.agent_id,
+                    parse_ok=False,
+                    raw_length=len(raw_content),
+                    used_fallback=True,
+                    task_id=task_id,
+                    run_id=run_id,
+                )
+            else:
+                log_agent_parse_result(
+                    agent_id=self.agent_def.agent_id,
+                    parse_ok=True,
+                    raw_length=len(raw_content),
+                    used_fallback=False,
+                    task_id=task_id,
+                    run_id=run_id,
                 )
             um = getattr(response, "usage_metadata", None)
             tokens = um.get("total_tokens") if isinstance(um, dict) else getattr(um, "total_tokens", None)
