@@ -5,13 +5,21 @@ import asyncio
 import json
 import logging
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from aeco.agents.response_parser import parse_agent_response
+from aeco.agents.response_parser import (
+    extract_code_artifacts_from_text,
+    parse_agent_response,
+)
 from aeco.config import settings
-from aeco.logging.company_logger import log_agent_end, log_agent_start
+from aeco.logging.company_logger import (
+    log_agent_end,
+    log_agent_parse_result,
+    log_agent_start,
+)
 from aeco.models.agent import AgentDefinition
 
 logger = logging.getLogger(__name__)
@@ -81,8 +89,9 @@ class ClaudeCodeExecutor:
             + (f"You are working in the directory: {workspace}\n" if workspace else "")
             + "Use the available tools to read existing files, write new files, and execute code as needed.\n\n"
             "When you are finished, output your final response as a single JSON object "
-            "according to your output format specification. The JSON must include at minimum: "
-            "decision, assumptions, risks, confidence. Include code_artifacts if you wrote files."
+            "according to your output format specification. Use valid JSON only: double quotes for strings, "
+            "no trailing commas, no comments. Include at minimum: decision, assumptions, risks, confidence. "
+            "Include code_artifacts if you wrote files. Output only the JSON (or a ```json ... ``` block)."
         )
 
     def _build_command(self, context: dict[str, Any]) -> list[str]:
@@ -98,7 +107,6 @@ class ClaudeCodeExecutor:
             "-p",
             "--output-format", "json",
             "--max-turns", str(max_turns),
-            "--verbose",
         ]
 
         # Append the agent's system prompt
@@ -159,10 +167,11 @@ class ClaudeCodeExecutor:
                 stderr=asyncio.subprocess.PIPE,
                 cwd=workspace or None,
             )
-        except FileNotFoundError:
+        except (FileNotFoundError, OSError, PermissionError) as exc:
             logger.warning(
-                "Claude Code CLI not found (%s); falling back to LangChain executor for %s",
-                settings.claude_code_binary,
+                "Claude Code CLI failed to start (%s: %s); falling back to LangChain executor for %s",
+                type(exc).__name__,
+                exc,
                 self.agent_def.agent_id,
             )
             from aeco.agents.runtime import AgentRuntime
@@ -202,7 +211,42 @@ class ClaudeCodeExecutor:
                 raise RuntimeError(f"Claude Code returned error: {result_text[:500]}")
 
             # Parse the agent's structured JSON from the result text
-            result = parse_agent_response(result_text)
+            result = parse_agent_response(result_text or "")
+
+            # On parse failure or empty output: return fallback so pipeline gets usable artifacts
+            if result.get("parse_error") or not (result_text or "").strip():
+                logger.warning(
+                    "[%s] Claude Code result empty or not JSON (%d chars). Using fallback.",
+                    self.agent_def.agent_id,
+                    len(result_text or ""),
+                )
+                raw = result.get("raw_response") or result_text or ""
+                code_artifacts = extract_code_artifacts_from_text(raw)
+                summary = raw.strip()[:500] if raw else ""
+                result = {
+                    "decision": summary or "Task completed via Claude Code; no JSON summary returned.",
+                    "code_artifacts": code_artifacts,
+                    "assumptions": [],
+                    "risks": [],
+                    "confidence": 0.5,
+                }
+                log_agent_parse_result(
+                    agent_id=self.agent_def.agent_id,
+                    parse_ok=False,
+                    raw_length=len(result_text or ""),
+                    used_fallback=True,
+                    task_id=context.get("task_id"),
+                    run_id=context.get("workflow_run_id"),
+                )
+            else:
+                log_agent_parse_result(
+                    agent_id=self.agent_def.agent_id,
+                    parse_ok=True,
+                    raw_length=len(result_text or ""),
+                    used_fallback=False,
+                    task_id=context.get("task_id"),
+                    run_id=context.get("workflow_run_id"),
+                )
 
             duration_ms = int((time.monotonic() - start_time) * 1000)
 
@@ -217,11 +261,32 @@ class ClaudeCodeExecutor:
             )
 
             if self.audit_logger:
+                _run_id = run_id
+                _task_id = task_id
+                _init_id = context.get("initiative_id")
+                if isinstance(_run_id, str) and _run_id:
+                    try:
+                        _run_id = uuid.UUID(_run_id)
+                    except ValueError:
+                        _run_id = None
+                if isinstance(_task_id, str) and _task_id:
+                    try:
+                        _task_id = uuid.UUID(_task_id)
+                    except ValueError:
+                        _task_id = None
+                if isinstance(_init_id, str) and _init_id:
+                    try:
+                        _init_id = uuid.UUID(_init_id)
+                    except ValueError:
+                        _init_id = None
                 await self.audit_logger.log(
                     agent_id=self.agent_def.agent_id,
                     action="claude_code_call",
                     input_summary=prompt[:500],
                     output_summary=str(result)[:500],
+                    workflow_run_id=_run_id,
+                    task_id=_task_id,
+                    initiative_id=_init_id,
                     llm_provider="claude_code",
                     llm_model=self.agent_def.claude_code_config.model if self.agent_def.claude_code_config else "default",
                     tokens_used=None,
