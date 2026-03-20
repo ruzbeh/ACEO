@@ -123,10 +123,40 @@ class AgentRuntime:
 
             if response is None:
                 response = await self.provider.invoke(messages)
-            duration_ms = int((time.monotonic() - start_time) * 1000)
+
             raw_content = response.content if hasattr(response, "content") else str(response)
             if not isinstance(raw_content, str):
                 raw_content = str(raw_content) if raw_content else ""
+
+            # If we used tools and the final response has no JSON block, force a summary round
+            if langchain_tools and raw_content and "```json" not in raw_content.lower():
+                import logging as _log
+                _log.getLogger(__name__).info(
+                    "[%s] Tool-using agent finished without JSON block (%d chars). Requesting JSON summary...",
+                    self.agent_def.agent_id,
+                    len(raw_content),
+                )
+                summary_prompt = (
+                    "You have completed your tool calls. Now provide your final output as a single "
+                    "JSON object inside ```json ... ``` markers. Include all relevant fields: "
+                    "decision, assumptions, risks, confidence, and any code_artifacts or results. "
+                    "Output ONLY the JSON block — no other text."
+                )
+                messages = [*messages, response, HumanMessage(content=summary_prompt)]
+                try:
+                    summary_response = await self.provider.invoke(messages)
+                    summary_content = summary_response.content if hasattr(summary_response, "content") else str(summary_response)
+                    if not isinstance(summary_content, str):
+                        summary_content = str(summary_content) if summary_content else ""
+                    if summary_content.strip():
+                        raw_content = summary_content
+                        response = summary_response
+                except Exception as e:
+                    _log.getLogger(__name__).warning(
+                        "[%s] JSON summary round failed: %s", self.agent_def.agent_id, e
+                    )
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
             result = self._parse_response(raw_content)
 
             # On parse failure: retry once with a focused JSON-only prompt
