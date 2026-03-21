@@ -71,7 +71,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.4
       max_tokens: 2048
     tools: [clickup_read_task, clickup_create_task, clickup_update_task, clickup_create_comment]
@@ -88,8 +88,8 @@ agents:
     system_prompt_path: aeco/agents/prompts/chief_architect.md
     executor: claude_code
     claude_code_config:
-      max_turns: 15
-      timeout_seconds: 600
+      max_turns: 8
+      timeout_seconds: 300
       allowed_tools: [Read, Write, Edit, Glob, Grep, Bash]
     llm_config:
       provider: openrouter
@@ -106,8 +106,8 @@ agents:
     system_prompt_path: aeco/agents/prompts/backend_engineer.md
     executor: claude_code
     claude_code_config:
-      max_turns: 25
-      timeout_seconds: 900
+      max_turns: 10
+      timeout_seconds: 300
       allowed_tools: [Read, Write, Edit, Bash, Glob, Grep]
     llm_config:
       provider: openrouter
@@ -124,8 +124,8 @@ agents:
     system_prompt_path: aeco/agents/prompts/frontend_engineer.md
     executor: claude_code
     claude_code_config:
-      max_turns: 25
-      timeout_seconds: 900
+      max_turns: 10
+      timeout_seconds: 300
       allowed_tools: [Read, Write, Edit, Bash, Glob, Grep]
     llm_config:
       provider: openrouter
@@ -142,8 +142,8 @@ agents:
     system_prompt_path: aeco/agents/prompts/database_engineer.md
     executor: claude_code
     claude_code_config:
-      max_turns: 20
-      timeout_seconds: 600
+      max_turns: 10
+      timeout_seconds: 300
       allowed_tools: [Read, Write, Edit, Bash, Glob, Grep]
     llm_config:
       provider: openrouter
@@ -160,8 +160,8 @@ agents:
     system_prompt_path: aeco/agents/prompts/api_engineer.md
     executor: claude_code
     claude_code_config:
-      max_turns: 20
-      timeout_seconds: 600
+      max_turns: 10
+      timeout_seconds: 300
       allowed_tools: [Read, Write, Edit, Bash, Glob, Grep]
     llm_config:
       provider: openrouter
@@ -183,7 +183,7 @@ agents:
       allowed_tools: [Read, Write, Edit, Bash, Glob, Grep]
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.3
       max_tokens: 4096
     tools: [file_write, file_read, code_execute]
@@ -196,8 +196,8 @@ agents:
     system_prompt_path: aeco/agents/prompts/fullstack_engineer.md
     executor: claude_code
     claude_code_config:
-      max_turns: 25
-      timeout_seconds: 900
+      max_turns: 10
+      timeout_seconds: 300
       allowed_tools: [Read, Write, Edit, Bash, Glob, Grep]
     llm_config:
       provider: openrouter
@@ -214,12 +214,12 @@ agents:
     system_prompt_path: aeco/agents/prompts/qa_engineer.md
     executor: claude_code
     claude_code_config:
-      max_turns: 20
-      timeout_seconds: 600
+      max_turns: 8
+      timeout_seconds: 300
       allowed_tools: [Read, Write, Edit, Bash, Glob, Grep]
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 4096
     tools: [clickup_read_task, clickup_create_comment, file_read, file_write, code_execute]
@@ -237,7 +237,7 @@ agents:
       allowed_tools: [Read, Write, Edit, Bash, Glob, Grep]
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.3
       max_tokens: 4096
     tools: [clickup_read_task, clickup_create_comment, file_write, file_read, code_execute]
@@ -255,7 +255,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.3
       max_tokens: 2048
     tools: [clickup_read_task, clickup_update_task, clickup_create_comment]
@@ -269,7 +269,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 1024
     tools: [budget_read, budget_update, clickup_read_task, clickup_create_comment]
@@ -283,7 +283,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.3
       max_tokens: 2048
     tools: [clickup_read_task, clickup_create_comment, metrics_read, file_read]
@@ -297,7 +297,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.3
       max_tokens: 2048
     tools: [agent_logs_read, metrics_read, clickup_read_task, clickup_create_comment]
@@ -311,7 +311,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 2048
     tools: [clickup_read_task, clickup_create_comment, file_read]
@@ -325,7 +325,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.4
       max_tokens: 2048
     tools: [agent_logs_read, metrics_read, clickup_read_task, clickup_create_comment]
@@ -339,7 +339,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.3
       max_tokens: 2048
     tools: [file_read, code_execute, clickup_read_task, clickup_create_comment]
@@ -353,7 +353,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 2048
     tools: [agent_logs_read, metrics_read, clickup_read_task, clickup_create_comment]
@@ -367,7 +367,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.3
       max_tokens: 2048
     tools: [metrics_read, agent_logs_read, clickup_read_task, clickup_create_comment]
@@ -399,7 +399,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.7
       max_tokens: 4096
     tools: [file_write, file_read, metrics_read]
@@ -413,7 +413,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.3
       max_tokens: 2048
     tools: [stripe_get_customers, stripe_get_churn, metrics_read, agent_logs_read]
@@ -427,7 +427,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 2048
     tools: [stripe_get_mrr, stripe_get_revenue, stripe_get_churn, stripe_get_customers, budget_read, metrics_read]
@@ -447,7 +447,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 512
     tools: []
@@ -463,7 +463,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 512
     tools: []
@@ -479,7 +479,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 512
     tools: []
@@ -495,7 +495,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 512
     tools: []
@@ -511,7 +511,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 512
     tools: []
@@ -543,7 +543,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.6
       max_tokens: 4096
     tools: [file_write, file_read, metrics_read]
@@ -557,7 +557,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.4
       max_tokens: 2048
     tools: [file_read, metrics_read]
@@ -570,12 +570,12 @@ agents:
     system_prompt_path: aeco/agents/prompts/landing_page_designer.md
     executor: claude_code
     claude_code_config:
-      max_turns: 20
-      timeout_seconds: 600
+      max_turns: 8
+      timeout_seconds: 300
       allowed_tools: [Read, Write, Edit, Glob, Grep, Bash]
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.6
       max_tokens: 4096
     tools: [file_write, file_read, metrics_read]
@@ -593,7 +593,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.5
       max_tokens: 2048
     tools: [metrics_read, agent_logs_read]
@@ -607,7 +607,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 2048
     tools: [metrics_read, stripe_get_mrr, stripe_get_revenue, stripe_get_churn, stripe_get_customers]
@@ -620,12 +620,12 @@ agents:
     system_prompt_path: aeco/agents/prompts/product_designer.md
     executor: claude_code
     claude_code_config:
-      max_turns: 15
-      timeout_seconds: 600
+      max_turns: 8
+      timeout_seconds: 300
       allowed_tools: [Read, Write, Edit, Glob, Grep]
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.6
       max_tokens: 4096
     tools: [file_write, file_read]
@@ -643,7 +643,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 2048
     tools: [stripe_get_mrr, stripe_get_revenue, stripe_get_customers, metrics_read]
@@ -657,7 +657,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.3
       max_tokens: 2048
     tools: [stripe_get_churn, stripe_get_customers, metrics_read]
@@ -671,7 +671,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.4
       max_tokens: 2048
     tools: [metrics_read, agent_logs_read]
@@ -689,7 +689,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 2048
     tools: [file_read, metrics_read]
@@ -703,7 +703,7 @@ agents:
     executor: langchain
     llm_config:
       provider: openrouter
-      model: anthropic/claude-haiku-3.5
+      model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 2048
     tools: [budget_read, metrics_read]
