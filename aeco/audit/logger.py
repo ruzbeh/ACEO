@@ -21,6 +21,7 @@ class AuditLogger:
         output_summary: str = "",
         workflow_run_id: Optional[uuid.UUID] = None,
         task_id: Optional[uuid.UUID] = None,
+        initiative_id: Optional[uuid.UUID] = None,
         llm_provider: Optional[str] = None,
         llm_model: Optional[str] = None,
         tokens_used: Optional[int] = None,
@@ -61,6 +62,7 @@ class AuditLogger:
                     llm_model=llm_model,
                     workflow_run_id=workflow_run_id,
                     task_id=task_id,
+                    initiative_id=initiative_id,
                     description=action or "llm_call",
                 )
                 logger.info(

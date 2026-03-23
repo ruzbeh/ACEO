@@ -1,0 +1,8 @@
+{
+  "name": "testimonials",
+  "description": "3-card testimonial grid with avatar, name, role, and quote",
+  "files": [
+    { "src": "Testimonials.tsx", "dest": "{{TARGET_PATH}}" }
+  ],
+  "variables": []
+}

@@ -40,8 +40,8 @@ export function WhatsHappening({ status }: WhatsHappeningProps) {
           <h3 className="text-sm font-medium text-gray-200">What&apos;s happening</h3>
           <p className="mt-1 text-xs text-gray-400">
             The workflow is running: product spec → architect → task plan → execution → evaluation.
-            New decisions appear in <strong className="text-gray-300">Decision history</strong> below
-            as each step completes (updates every few seconds).
+            Watch <strong className="text-gray-300">Live trace</strong> below for agent/tool logs in real time.
+            <strong className="text-gray-300"> Decision history</strong> records ledger entries as each step completes.
           </p>
           <div className="mt-4">
             <StatusPipeline

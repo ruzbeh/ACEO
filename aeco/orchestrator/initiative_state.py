@@ -22,6 +22,7 @@ class InitiativeState(TypedDict):
     execution_results: Annotated[List[dict], operator.add]  # Per-task results
     security_review: Optional[dict]           # Security Reviewer output
     evaluation: Optional[dict]              # Evaluator output
+    acceptance_result: Optional[dict]       # Acceptance Tester output
 
     # Metrics defined by PM
     north_star_metric: Optional[str]
@@ -33,7 +34,7 @@ class InitiativeState(TypedDict):
     decisions: Annotated[List[dict], operator.add]
 
     # Control flow
-    current_phase: str                   # intake, pm_spec, architect, security_review, task_planning, executing, evaluating, closed
+    current_phase: str                   # intake, pm_spec, architect, security_review, task_planning, executing, evaluating, acceptance_testing, closed
     verdict: Optional[str]                  # scale, iterate, kill
     iteration_count: int
     max_iterations: int

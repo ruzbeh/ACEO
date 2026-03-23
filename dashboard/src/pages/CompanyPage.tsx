@@ -151,7 +151,9 @@ function AgentNode({ agent, badgeColor }: { agent: AgentResponse; badgeColor: st
       <Icon size={14} className="shrink-0 text-gray-400" />
       <div className="min-w-0 flex-1">
         <div className="text-xs font-medium text-gray-200 truncate">{agent.name}</div>
-        <div className="text-[10px] text-gray-500">{agent.llm_model.split('/').pop()}</div>
+        <div className="text-[10px] text-gray-500">
+          {(agent.llm_model ?? '—').split('/').pop()}
+        </div>
       </div>
       <Badge className={cn('text-[9px] shrink-0', badgeColor)}>{agent.role}</Badge>
     </div>

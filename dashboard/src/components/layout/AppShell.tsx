@@ -14,7 +14,10 @@ export function AppShell() {
           <div className="flex items-center gap-2 border-b border-red-500/30 bg-red-500/10 px-6 py-2.5">
             <WifiOff size={14} className="text-red-400" />
             <span className="text-sm text-red-300">
-              Backend offline — start the API server on port 8000
+              Backend offline — start the API (uvicorn on 8000, or Docker on 8100). If you use{' '}
+              <code className="rounded bg-black/30 px-1">npm run dev</code>, set{' '}
+              <code className="rounded bg-black/30 px-1">VITE_DEV_PROXY_TARGET</code> in{' '}
+              <code className="rounded bg-black/30 px-1">dashboard/.env.local</code> to match.
             </span>
           </div>
         )}

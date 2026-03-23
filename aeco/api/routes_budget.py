@@ -150,3 +150,34 @@ async def get_optimization_report(budget_id: str):
     if "error" in report:
         raise HTTPException(status_code=404, detail=report["error"])
     return report
+
+
+@router.get("/periods/{budget_id}/spend-over-time")
+async def get_spend_over_time(
+    budget_id: str,
+    from_date: Optional[datetime] = None,
+    to_date: Optional[datetime] = None,
+    group_by: str = "day",
+):
+    """Get spend aggregated over time (daily or weekly)."""
+    engine = _get_engine()
+    return await engine.get_spend_over_time(
+        uuid.UUID(budget_id),
+        from_date=from_date,
+        to_date=to_date,
+        group_by=group_by if group_by in ("day", "week") else "day",
+    )
+
+
+@router.get("/periods/{budget_id}/by-initiative")
+async def get_spend_by_initiative_list(budget_id: str):
+    """Get total spend per initiative for the budget period."""
+    engine = _get_engine()
+    return await engine.get_spend_by_initiative_list(uuid.UUID(budget_id))
+
+
+@router.get("/periods/{budget_id}/recent-spend")
+async def get_recent_spend(budget_id: str, limit: int = 50):
+    """Get recent spend records with initiative, agent, and time."""
+    engine = _get_engine()
+    return await engine.get_recent_spend(uuid.UUID(budget_id), limit=limit)

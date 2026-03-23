@@ -1,0 +1,8 @@
+{
+  "name": "auth",
+  "description": "Google OAuth + email auth via Supabase",
+  "files": [
+    { "src": "app/auth/callback/route.ts", "dest": "app/auth/callback/route.ts" },
+    { "src": "components/GoogleOAuthButton.tsx", "dest": "components/GoogleOAuthButton.tsx" }
+  ]
+}

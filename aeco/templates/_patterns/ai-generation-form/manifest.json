@@ -1,0 +1,11 @@
+{
+  "name": "ai-generation-form",
+  "description": "Upload input with options, generate button, and results grid",
+  "files": [
+    { "src": "AIGenerationForm.tsx", "dest": "{{TARGET_PATH}}" }
+  ],
+  "variables": [
+    "API_ENDPOINT",
+    "MODEL_NAME"
+  ]
+}

@@ -39,7 +39,11 @@ class AgentRuntime:
             raise FileNotFoundError(
                 f"System prompt not found: {path} for agent {self.agent_def.agent_id}"
             )
-        return path.read_text()
+        base_prompt = path.read_text()
+
+        # Inject approved prompt patches (non-destructive runtime injection)
+        from aeco.agents.prompt_patcher import inject_patches
+        return inject_patches(self.agent_def.agent_id, base_prompt)
 
     async def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         """Execute the agent with the given context and return parsed response."""
@@ -90,9 +94,20 @@ class AgentRuntime:
                         tc_id = (tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)) or ""
                         if not name:
                             continue
+                        merged = dict(args)
+                        wp = context.get("workspace_path")
+                        if wp and name in (
+                            "file_write",
+                            "file_read",
+                            "code_execute",
+                            "git_workspace_snapshot",
+                            "capture_page_screenshot",
+                        ):
+                            if not merged.get("workspace_path"):
+                                merged["workspace_path"] = wp
                         try:
                             result = await tool_gateway.execute(
-                                name, self.agent_def.agent_id, agent_perms, **args
+                                name, self.agent_def.agent_id, agent_perms, **merged
                             )
                             content = json.dumps(result, default=str)
                             log_agent_tool_round(

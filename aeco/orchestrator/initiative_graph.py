@@ -3,7 +3,9 @@ Flow:
     START → intake → pm_spec → architect → security_review → task_planning → execute_tasks → evaluate
     security_review --[critical & not cleared]→ close → END
     evaluate --[iterate & under max]→ task_planning (loop)
-    evaluate --[scale | kill | max reached]→ close → END
+    evaluate --[scale]→ acceptance_test → [pass]→ close → END
+    evaluate --[scale]→ acceptance_test → [fail & can iterate]→ task_planning (loop)
+    evaluate --[kill | max reached]→ close → END
 """
 from __future__ import annotations
 
@@ -30,10 +32,26 @@ def _post_security_review(state: InitiativeState) -> str:
 
 
 def _post_evaluate(state: InitiativeState) -> str:
-    """After evaluation, decide whether to iterate or close."""
-    if state.get("current_phase") == "closed":
+    """After evaluation: scale → acceptance_test, iterate → task_planning, kill → close."""
+    phase = state.get("current_phase", "")
+
+    if phase == "closed":
         return "close"
-    # current_phase == "task_planning" means iterate
+    if phase == "task_planning":
+        return "task_planning"
+    if phase == "acceptance_testing":
+        return "acceptance_test"
+
+    # Fallback: if phase is unknown, close
+    return "close"
+
+
+def _post_acceptance_test(state: InitiativeState) -> str:
+    """After acceptance test: approved → close, rejected → task_planning or close."""
+    phase = state.get("current_phase", "")
+    if phase == "closed":
+        return "close"
+    # rejected but can iterate
     return "task_planning"
 
 
@@ -64,9 +82,10 @@ def build_initiative_graph(
     graph.add_node("task_planning", nodes.task_planning)
     graph.add_node("execute_tasks", nodes.execute_tasks)
     graph.add_node("evaluate", nodes.evaluate)
+    graph.add_node("acceptance_test", nodes.acceptance_test)
     graph.add_node("close", nodes.close)
 
-    # Edges: linear pipeline with security gate + evaluate → iterate loop
+    # Edges: linear pipeline with gates
     graph.set_entry_point("intake")
     graph.add_edge("intake", "pm_spec")
     graph.add_edge("pm_spec", "architect")
@@ -85,13 +104,24 @@ def build_initiative_graph(
     graph.add_edge("task_planning", "execute_tasks")
     graph.add_edge("execute_tasks", "evaluate")
 
-    # Evaluate decides: iterate (back to task_planning) or close
+    # Evaluate: scale → acceptance_test, iterate → task_planning, kill → close
     graph.add_conditional_edges(
         "evaluate",
         _post_evaluate,
         {
+            "acceptance_test": "acceptance_test",
             "task_planning": "task_planning",
             "close": "close",
+        },
+    )
+
+    # Acceptance test: approved → close (merge+deploy), rejected → task_planning or close
+    graph.add_conditional_edges(
+        "acceptance_test",
+        _post_acceptance_test,
+        {
+            "close": "close",
+            "task_planning": "task_planning",
         },
     )
 

@@ -9,13 +9,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections import deque
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from aeco.config import settings
+from aeco.events import event_bus
 from aeco.orchestrator.portfolio_state import PortfolioState
 
 logger = logging.getLogger(__name__)
@@ -94,11 +96,18 @@ class PortfolioStatusResponse(BaseModel):
     results: List[ExecutionResultItem] = []
     errors: List[str] = []
     messages: List[dict] = []
+    # Structured company logs (agent/tool/state) streamed during this run — same schema as logs/company.log JSON lines
+    live_log: List[dict] = []
 
 
 # --- Helper: build status response from state dict ---
 
-def _build_status_response(portfolio_id: str, state: dict, status: str) -> PortfolioStatusResponse:
+def _build_status_response(
+    portfolio_id: str,
+    state: dict,
+    status: str,
+    live_log: Optional[List[dict]] = None,
+) -> PortfolioStatusResponse:
     """Build a PortfolioStatusResponse from a state dict."""
     raw_opps = state.get("opportunities", [])
     opportunities = []
@@ -176,7 +185,30 @@ def _build_status_response(portfolio_id: str, state: dict, status: str) -> Portf
         results=results,
         errors=state.get("errors", []),
         messages=messages,
+        live_log=live_log or [],
     )
+
+
+_LIVE_LOG_MAX = 2000
+
+
+def append_portfolio_live_log(portfolio_id: str, record: dict[str, Any]) -> None:
+    """Append one company JSON log line to the in-memory run and notify WebSocket clients."""
+    run = _portfolio_runs.get(portfolio_id)
+    if not run:
+        return
+    dq = run.setdefault("live_log", deque(maxlen=_LIVE_LOG_MAX))
+    dq.append(record)
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(
+            event_bus.emit(
+                "portfolio.live_log",
+                {"portfolio_id": portfolio_id, "line": record},
+            )
+        )
+    except RuntimeError:
+        pass
 
 
 # --- Endpoints ---
@@ -220,6 +252,7 @@ async def run_portfolio(req: RunPortfolioRequest):
         "state": None,
         "started_at": now.isoformat(),
         "completed_at": None,
+        "live_log": deque(maxlen=_LIVE_LOG_MAX),
     }
 
     asyncio.create_task(
@@ -240,7 +273,9 @@ async def get_portfolio_status(portfolio_id: str):
     run = _portfolio_runs.get(portfolio_id)
     if run:
         state = run.get("state") or {}
-        return _build_status_response(portfolio_id, state, run.get("status", "unknown"))
+        ll = run.get("live_log")
+        live_log = list(ll) if ll else []
+        return _build_status_response(portfolio_id, state, run.get("status", "unknown"), live_log=live_log)
 
     # Fall back to DB
     try:
@@ -405,6 +440,9 @@ async def _execute_portfolio(
     workspace_path: str,
 ) -> None:
     """Execute the portfolio workflow asynchronously."""
+    from aeco.logging.company_logger import portfolio_run_id
+
+    ctx_token = portfolio_run_id.set(portfolio_id)
     try:
         initial_state: PortfolioState = {
             "portfolio_id": portfolio_id,
@@ -483,3 +521,10 @@ async def _execute_portfolio(
         }
         # Persist failure to DB
         await _persist_state(portfolio_id, failed_state, "failed")
+    finally:
+        portfolio_run_id.reset(ctx_token)
+
+
+from aeco.logging.portfolio_live_buffer import register_portfolio_live_append
+
+register_portfolio_live_append(append_portfolio_live_log)

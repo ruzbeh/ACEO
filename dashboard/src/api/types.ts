@@ -54,6 +54,8 @@ export interface InitiativeResponse {
   verdict: InitiativeVerdict;
   north_star_metric: string | null;
   created_at: string;
+  /** ISO timestamp — last time Run was clicked (workflow start) */
+  run_started_at?: string | null;
 }
 
 export type InitiativeStatus =
@@ -77,6 +79,14 @@ export interface CreateInitiativeRequest {
 export interface RunInitiativeRequest {
   initiative_id: string;
   workspace_path?: string;
+}
+
+/** Company-style JSON log lines (cat/event + payload) for initiative live trace */
+export interface InitiativeLiveLogResponse {
+  initiative_id: string;
+  /** Exact time the current/last workflow run started (ISO) */
+  run_started_at: string | null;
+  lines: Record<string, unknown>[];
 }
 
 // ── Decisions ──
@@ -205,6 +215,15 @@ export interface SpendByInitiativeItem {
   count: number;
 }
 
+export interface RecentSpendItem {
+  id: string;
+  initiative_id: string | null;
+  agent_id: string;
+  amount: number;
+  tokens_used: number | null;
+  created_at: string;
+}
+
 export interface OptimizationReport {
   budget_id: string;
   budget_name: string;
@@ -297,6 +316,8 @@ export interface PortfolioStatusResponse {
   results: ExecutionResultItem[];
   errors: string[];
   messages: PortfolioMessage[];
+  /** Structured company.log lines (agent, tool, node) during the run — same as server JSON logs */
+  live_log?: Record<string, unknown>[];
 }
 
 export interface PortfolioListItem {

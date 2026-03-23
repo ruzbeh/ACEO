@@ -8,6 +8,7 @@ import type {
   RunInitiativeRequest,
   DecisionsResponse,
   InitiativeSpend,
+  InitiativeLiveLogResponse,
 } from './types';
 
 export function useInitiatives() {
@@ -35,6 +36,7 @@ export function useInitiative(id: string) {
     return aecoWs.on('initiative.*', (event) => {
       if (event.data.initiative_id === id) {
         qc.invalidateQueries({ queryKey: ['initiatives', id] });
+        qc.invalidateQueries({ queryKey: ['initiatives', id, 'live-log'] });
       }
     });
   }, [id, qc]);
@@ -70,6 +72,31 @@ export function useDecisions(initiativeId: string) {
   });
 }
 
+/** Buffered company log + agent/tool lines for this initiative; updates via WebSocket `initiative.live_log`. */
+export function useInitiativeLiveLog(initiativeId: string | undefined, status: string | undefined) {
+  const qc = useQueryClient();
+  const inFlight = status && status !== 'draft' && status !== 'closed';
+
+  useEffect(() => {
+    if (!initiativeId) return undefined;
+    return aecoWs.on('initiative.live_log', (event) => {
+      if (event.data.initiative_id === initiativeId) {
+        qc.invalidateQueries({ queryKey: ['initiatives', initiativeId, 'live-log'] });
+      }
+    });
+  }, [initiativeId, qc]);
+
+  return useQuery({
+    queryKey: ['initiatives', initiativeId, 'live-log'],
+    queryFn: () => api.get<InitiativeLiveLogResponse>(`/initiatives/${initiativeId}/live-log`),
+    enabled: !!initiativeId,
+    refetchInterval: (query) => {
+      if (query.state.status === 'error' || !inFlight) return false;
+      return 3_000;
+    },
+  });
+}
+
 export function useCreateInitiative() {
   const qc = useQueryClient();
   return useMutation({
@@ -84,7 +111,14 @@ export function useRunInitiative() {
   return useMutation({
     mutationFn: (data: RunInitiativeRequest) =>
       api.post<{ initiative_id: string; status: string }>('/initiatives/run', data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['initiatives'] }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['initiatives'] });
+      const id = res?.initiative_id;
+      if (id) {
+        qc.invalidateQueries({ queryKey: ['initiatives', id] });
+        qc.invalidateQueries({ queryKey: ['initiatives', id, 'live-log'] });
+      }
+    },
   });
 }
 
@@ -93,7 +127,14 @@ export function useKillInitiative() {
   return useMutation({
     mutationFn: (initiativeId: string) =>
       api.post<InitiativeResponse>(`/initiatives/${initiativeId}/kill`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['initiatives'] }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['initiatives'] });
+      const id = data?.id;
+      if (id) {
+        qc.invalidateQueries({ queryKey: ['initiatives', id] });
+        qc.invalidateQueries({ queryKey: ['initiatives', id, 'live-log'] });
+      }
+    },
   });
 }
 

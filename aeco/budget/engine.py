@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import statistics
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select, func
@@ -711,7 +711,6 @@ class BudgetEngine:
         group_by: str = "day",
     ) -> dict:
         """Get spend aggregated over time (daily or weekly buckets)."""
-        from sqlalchemy import cast, Date
         async with self._session_factory() as session:
             stmt = select(SpendRecord).where(SpendRecord.budget_period_id == budget_id)
             if from_date:
@@ -727,7 +726,7 @@ class BudgetEngine:
                 dt = r.created_at
                 if group_by == "week":
                     # ISO week Monday
-                    start = dt - datetime.timedelta(days=dt.weekday())
+                    start = dt - timedelta(days=dt.weekday())
                     key = start.strftime("%Y-%m-%d")
                 else:
                     key = dt.strftime("%Y-%m-%d")
@@ -768,6 +767,30 @@ class BudgetEngine:
                     "count": row.count,
                 }
                 for row in result
+            ]
+
+    async def get_recent_spend(
+        self, budget_id: uuid.UUID, limit: int = 50
+    ) -> list[dict]:
+        """Get recent spend records for the budget period (for dashboard table)."""
+        async with self._session_factory() as session:
+            stmt = (
+                select(SpendRecord)
+                .where(SpendRecord.budget_period_id == budget_id)
+                .order_by(SpendRecord.created_at.desc())
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            return [
+                {
+                    "id": str(r.id),
+                    "initiative_id": str(r.initiative_id) if r.initiative_id else None,
+                    "agent_id": r.agent_id,
+                    "amount": round(r.amount, 4),
+                    "tokens_used": r.tokens_used,
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in result.scalars().all()
             ]
 
     async def get_optimization_report(

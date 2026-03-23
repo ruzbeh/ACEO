@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground: #171717;
+  --background: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground: #ededed;
+    --background: #0a0a0a;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    * {
+      @apply border-gray-800;
+    }
+  }
+}

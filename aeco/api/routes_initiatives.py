@@ -4,8 +4,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections import deque
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -14,12 +16,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from aeco.config import settings
 from aeco.db.session import async_session_factory, get_session
+from aeco.events import event_bus
 from aeco.models.initiative import Initiative, InitiativeStatus, InitiativeVerdict
 from aeco.orchestrator.initiative_state import InitiativeState
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/initiatives", tags=["initiatives"])
+
+# In-memory live log for initiative runs (company JSON lines + node steps)
+_initiative_runs: dict[str, dict[str, Any]] = {}
+_LIVE_LOG_MAX = 2000
+
+
+def append_initiative_live_log(initiative_id: str, record: dict[str, Any]) -> None:
+    """Append one log line to the active initiative run and notify WebSocket clients."""
+    run = _initiative_runs.get(initiative_id)
+    if not run:
+        return
+    dq = run.setdefault("live_log", deque(maxlen=_LIVE_LOG_MAX))
+    dq.append(record)
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(
+            event_bus.emit(
+                "initiative.live_log",
+                {"initiative_id": initiative_id, "line": record},
+            )
+        )
+    except RuntimeError:
+        pass
 
 # Set by main.py after the initiative graph is built
 _compiled_initiative_graph = None
@@ -49,6 +75,7 @@ class InitiativeResponse(BaseModel):
     verdict: str
     north_star_metric: Optional[str]
     created_at: str
+    run_started_at: Optional[str] = None  # ISO — exact time the workflow was last started (Run)
 
     model_config = {"from_attributes": True}
 
@@ -124,12 +151,14 @@ async def run_initiative(req: RunInitiativeRequest):
     if _compiled_initiative_graph is None:
         raise HTTPException(status_code=503, detail="Initiative graph not initialized")
 
+    now = datetime.now(timezone.utc)
     async with async_session_factory() as session:
         initiative = await session.get(Initiative, uuid.UUID(req.initiative_id))
         if not initiative:
             raise HTTPException(status_code=404, detail="Initiative not found")
 
         initiative.status = InitiativeStatus.PLANNING.value
+        initiative.run_started_at = now
         await session.commit()
 
     try:
@@ -138,6 +167,12 @@ async def run_initiative(req: RunInitiativeRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid workspace path: {e}") from e
+
+    iid = str(initiative.id)
+    _initiative_runs[iid] = {
+        "started_at": now.isoformat(),
+        "live_log": deque(maxlen=_LIVE_LOG_MAX),
+    }
 
     asyncio.create_task(
         _execute_initiative(initiative, ws_path)
@@ -174,6 +209,25 @@ async def get_initiative_decisions(initiative_id: str):
     return {"initiative_id": initiative_id, "decisions": decisions}
 
 
+@router.get("/{initiative_id}/live-log")
+async def get_initiative_live_log(
+    initiative_id: str, session: AsyncSession = Depends(get_session)
+):
+    """Return buffered log lines and exact workflow start time (memory + DB fallback)."""
+    run = _initiative_runs.get(initiative_id)
+    lines = list(run["live_log"]) if run and run.get("live_log") else []
+    started = (run or {}).get("started_at")
+    if not started:
+        init = await session.get(Initiative, uuid.UUID(initiative_id))
+        if init and init.run_started_at:
+            started = init.run_started_at.isoformat()
+    return {
+        "initiative_id": initiative_id,
+        "run_started_at": started,
+        "lines": lines,
+    }
+
+
 @router.get("/{initiative_id}/spend")
 async def get_initiative_spend(initiative_id: str, budget_id: Optional[str] = None):
     """Get budget spend breakdown for this initiative (optionally scoped to a budget period)."""
@@ -188,6 +242,9 @@ async def get_initiative_spend(initiative_id: str, budget_id: Optional[str] = No
 
 async def _execute_initiative(initiative: Initiative, workspace_path: str) -> None:
     """Execute the initiative workflow asynchronously."""
+    from aeco.logging.company_logger import initiative_run_id
+
+    token = initiative_run_id.set(str(initiative.id))
     try:
         initial_state: InitiativeState = {
             "initiative_id": str(initiative.id),
@@ -247,6 +304,13 @@ async def _execute_initiative(initiative: Initiative, workspace_path: str) -> No
                 db_init.status = InitiativeStatus.CLOSED.value
                 db_init.verdict = InitiativeVerdict.KILL.value
                 await session.commit()
+    finally:
+        initiative_run_id.reset(token)
+
+
+from aeco.logging.initiative_live_buffer import register_initiative_live_append
+
+register_initiative_live_append(append_initiative_live_log)
 
 
 def _to_response(i: Initiative) -> InitiativeResponse:
@@ -259,4 +323,5 @@ def _to_response(i: Initiative) -> InitiativeResponse:
         verdict=i.verdict,
         north_star_metric=i.north_star_metric,
         created_at=i.created_at.isoformat(),
+        run_started_at=i.run_started_at.isoformat() if i.run_started_at else None,
     )

@@ -22,6 +22,18 @@ export function formatDateTime(iso: string): string {
   });
 }
 
+/** Full local date/time with seconds and timezone (for workflow run start). */
+export function formatExactDateTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export function formatCurrency(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }

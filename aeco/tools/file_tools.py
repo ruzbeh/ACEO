@@ -29,4 +29,21 @@ async def file_read(path: str, workspace_path: str | None = None) -> dict:
     target = _resolve_workspace_path(path, workspace_path)
     if not target.exists():
         return {"status": "error", "error": f"File not found: {path}"}
+    if target.is_dir():
+        # Instead of erroring, list files so the agent can pick one
+        entries = []
+        try:
+            for item in sorted(target.iterdir()):
+                rel = str(item.relative_to(Path(workspace_path or settings.workspace_path).resolve()))
+                kind = "dir" if item.is_dir() else "file"
+                entries.append({"path": rel, "type": kind})
+        except Exception:
+            pass
+        return {
+            "status": "ok",
+            "is_directory": True,
+            "path": path,
+            "entries": entries[:100],  # Cap at 100 entries
+            "hint": "This path is a directory. Here are its contents. Call file_read with a specific file path to read a file.",
+        }
     return {"status": "ok", "content": target.read_text(), "path": path}

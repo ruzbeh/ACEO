@@ -1,0 +1,9 @@
+{
+  "name": "file-upload",
+  "description": "File upload with Supabase Storage",
+  "files": [
+    { "src": "components/FileUpload.tsx", "dest": "components/FileUpload.tsx" },
+    { "src": "app/api/upload/route.ts", "dest": "app/api/upload/route.ts" },
+    { "src": "lib/storage.ts", "dest": "lib/storage.ts" }
+  ]
+}

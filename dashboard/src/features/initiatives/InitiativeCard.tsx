@@ -4,7 +4,7 @@ import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { VerdictBadge } from './VerdictBadge';
 import { INITIATIVE_STATUS_COLORS } from '../../lib/constants';
-import { formatDate } from '../../lib/utils';
+import { formatDate, formatExactDateTime } from '../../lib/utils';
 import type { InitiativeResponse } from '../../api/types';
 
 interface Props {
@@ -46,7 +46,13 @@ export function InitiativeCard({ initiative, onCopy }: Props) {
         <Badge className={INITIATIVE_STATUS_COLORS[initiative.status] ?? ''}>
           {initiative.status.replace('_', ' ')}
         </Badge>
-        <span className="text-xs text-gray-500">{formatDate(initiative.created_at)}</span>
+        <span className="text-xs text-gray-500" title={initiative.run_started_at ? `Run started: ${formatExactDateTime(initiative.run_started_at)}` : undefined}>
+          {initiative.run_started_at ? (
+            <>Run {formatExactDateTime(initiative.run_started_at)}</>
+          ) : (
+            <>Created {formatDate(initiative.created_at)}</>
+          )}
+        </span>
       </div>
     </Card>
   );
