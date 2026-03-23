@@ -169,6 +169,24 @@ class ClaudeCodeExecutor:
             f"tools={self._resolve_allowed_tools()}, cwd={workspace or 'none'})"
         )
 
+        # Log full input for debugging — visible in initiative live trace
+        from aeco.logging.company_logger import company_logger
+        company_logger.log({
+            "event": "claude_code_input",
+            "agent_id": self.agent_def.agent_id,
+            "initiative_id": context.get("initiative_id", ""),
+            "task_title": context.get("task_title", ""),
+            "command": cmd,
+            "prompt_length": len(prompt),
+            "prompt_preview": prompt[:2000],
+            "system_prompt_preview": self._system_prompt[:1000],
+            "context_keys": list(context.keys()),
+            "workspace": workspace,
+            "allowed_tools": self._resolve_allowed_tools(),
+            "max_turns": cfg.max_turns if cfg else 10,
+            "timeout": timeout,
+        })
+
         # Start the subprocess — NO fallback, raise on failure
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -239,6 +257,23 @@ class ClaudeCodeExecutor:
             num_turns=envelope.get("num_turns", 0),
             session_id=envelope.get("session_id", ""),
         )
+
+        # Log full output for debugging — visible in initiative live trace
+        company_logger.log({
+            "event": "claude_code_output",
+            "agent_id": self.agent_def.agent_id,
+            "initiative_id": context.get("initiative_id", ""),
+            "task_title": context.get("task_title", ""),
+            "exit_code": proc.returncode,
+            "is_error": is_error,
+            "duration_ms": duration_ms,
+            "cost_usd": self.last_meta.cost_usd,
+            "num_turns": self.last_meta.num_turns,
+            "session_id": self.last_meta.session_id,
+            "result_length": len(result_text or ""),
+            "result_preview": (result_text or "")[:3000],
+            "stderr_preview": stderr[:500] if stderr else "",
+        })
 
         if is_error:
             log_agent_end(

@@ -414,6 +414,92 @@ async def get_initiative_cost(initiative_id: str):
     }
 
 
+@router.get("/{initiative_id}/claude-code-io")
+async def get_claude_code_io(initiative_id: str):
+    """Get Claude Code input/output traces for this initiative.
+
+    Returns every claude_code_input and claude_code_output log entry
+    for this initiative, paired by agent_id + task_title.
+    """
+    run = _initiative_runs.get(initiative_id)
+    lines = list(run.get("live_log", [])) if run else []
+
+    # Filter to claude_code_input and claude_code_output events
+    traces: list[dict] = []
+    inputs_by_key: dict[str, dict] = {}
+
+    for line in lines:
+        event = line.get("event", "")
+        if line.get("initiative_id") != initiative_id:
+            continue
+
+        if event == "claude_code_input":
+            key = f"{line.get('agent_id', '')}::{line.get('task_title', '')}"
+            inputs_by_key[key] = {
+                "agent_id": line.get("agent_id", ""),
+                "task_title": line.get("task_title", ""),
+                "timestamp": line.get("ts", ""),
+                "input": {
+                    "prompt_preview": line.get("prompt_preview", ""),
+                    "system_prompt_preview": line.get("system_prompt_preview", ""),
+                    "context_keys": line.get("context_keys", []),
+                    "workspace": line.get("workspace", ""),
+                    "allowed_tools": line.get("allowed_tools", []),
+                    "max_turns": line.get("max_turns", 0),
+                    "timeout": line.get("timeout", 0),
+                    "prompt_length": line.get("prompt_length", 0),
+                },
+                "output": None,
+            }
+
+        elif event == "claude_code_output":
+            key = f"{line.get('agent_id', '')}::{line.get('task_title', '')}"
+            entry = inputs_by_key.get(key)
+            if entry:
+                entry["output"] = {
+                    "exit_code": line.get("exit_code", 0),
+                    "is_error": line.get("is_error", False),
+                    "duration_ms": line.get("duration_ms", 0),
+                    "cost_usd": line.get("cost_usd", 0.0),
+                    "num_turns": line.get("num_turns", 0),
+                    "session_id": line.get("session_id", ""),
+                    "result_length": line.get("result_length", 0),
+                    "result_preview": line.get("result_preview", ""),
+                    "stderr_preview": line.get("stderr_preview", ""),
+                }
+                traces.append(entry)
+            else:
+                # Output without matching input (edge case)
+                traces.append({
+                    "agent_id": line.get("agent_id", ""),
+                    "task_title": line.get("task_title", ""),
+                    "timestamp": line.get("ts", ""),
+                    "input": None,
+                    "output": {
+                        "exit_code": line.get("exit_code", 0),
+                        "is_error": line.get("is_error", False),
+                        "duration_ms": line.get("duration_ms", 0),
+                        "cost_usd": line.get("cost_usd", 0.0),
+                        "num_turns": line.get("num_turns", 0),
+                        "result_length": line.get("result_length", 0),
+                        "result_preview": line.get("result_preview", ""),
+                    },
+                })
+
+    # Also include unpaired inputs (still running)
+    paired_keys = {f"{t['agent_id']}::{t['task_title']}" for t in traces}
+    for key, entry in inputs_by_key.items():
+        if key not in paired_keys:
+            entry["output"] = {"status": "running"}
+            traces.append(entry)
+
+    return {
+        "initiative_id": initiative_id,
+        "trace_count": len(traces),
+        "traces": traces,
+    }
+
+
 # --- Internal ---
 
 
