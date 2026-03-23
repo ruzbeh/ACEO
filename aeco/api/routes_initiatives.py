@@ -122,7 +122,7 @@ async def create_initiative(
     """Create a new initiative. Rejects near-duplicates of active initiatives."""
     # Dedup check: block if an active initiative has the same title
     from sqlalchemy import and_, or_
-    active_statuses = [InitiativeStatus.draft, InitiativeStatus.planning, InitiativeStatus.executing]
+    active_statuses = [InitiativeStatus.DRAFT, InitiativeStatus.PLANNING, InitiativeStatus.EXECUTING]
     dup_query = select(Initiative).where(
         and_(
             Initiative.title == req.title,
