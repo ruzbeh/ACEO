@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { Dialog } from '../../components/ui/Dialog';
 import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { Button } from '../../components/ui/Button';
+import { ScreenshotUpload } from '../../components/ui/ScreenshotUpload';
+import type { ScreenshotUploadData } from '../../components/ui/ScreenshotUpload';
 import { useCreateInitiative } from '../../api/initiatives';
 import { WORKSPACE_PRESETS } from '../../lib/constants';
 import type { InitiativeResponse } from '../../api/types';
@@ -20,6 +23,7 @@ export function CreateInitiativeDialog({ open, onClose, copyFrom }: Props) {
   const [hypothesis, setHypothesis] = useState('');
   const [workspacePath, setWorkspacePath] = useState('');
   const [workspacePreset, setWorkspacePreset] = useState<string>('');
+  const [screenshots, setScreenshots] = useState<ScreenshotUploadData[]>([]);
   const create = useCreateInitiative();
 
   useEffect(() => {
@@ -35,6 +39,7 @@ export function CreateInitiativeDialog({ open, onClose, copyFrom }: Props) {
     }
     setWorkspacePath('');
     setWorkspacePreset('');
+    setScreenshots([]);
   }, [open, copyFrom]);
 
   const effectiveWorkspacePath =
@@ -56,6 +61,7 @@ export function CreateInitiativeDialog({ open, onClose, copyFrom }: Props) {
           setHypothesis('');
           setWorkspacePath('');
           setWorkspacePreset('');
+          setScreenshots([]);
           onClose();
         },
       },
@@ -68,6 +74,33 @@ export function CreateInitiativeDialog({ open, onClose, copyFrom }: Props) {
         <Input label="Title" id="title" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="e.g. Improve onboarding conversion" />
         <Textarea label="Goal" id="goal" value={goal} onChange={(e) => setGoal(e.target.value)} required placeholder="What outcome should this achieve?" />
         <Textarea label="Hypothesis" id="hypothesis" value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} placeholder="Optional product hypothesis" />
+        <ScreenshotUpload
+          compact
+          label="Screenshots (optional)"
+          placeholder="Describe what this screenshot shows…"
+          onUpload={(data) => setScreenshots((prev) => [...prev, data])}
+        />
+        {screenshots.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {screenshots.map((s, i) => (
+              <div key={i} className="relative group">
+                <img
+                  src={URL.createObjectURL(s.file)}
+                  alt={s.feedback || `Screenshot ${i + 1}`}
+                  className="h-14 w-14 rounded-md border border-border object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => setScreenshots((prev) => prev.filter((_, j) => j !== i))}
+                  className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white group-hover:flex"
+                  title="Remove"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="space-y-1">
           <label htmlFor="workspace-preset" className="block text-sm font-medium text-gray-300">Workspace</label>
           <p className="text-xs text-gray-500">Path must exist on the server. Use an absolute path (e.g. /path/to/project) for reliability.</p>

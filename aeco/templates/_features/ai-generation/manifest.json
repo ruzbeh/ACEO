@@ -1,0 +1,10 @@
+{
+  "name": "ai-generation",
+  "description": "AI generation via external API (Replicate/OpenAI)",
+  "files": [
+    { "src": "components/AIGenerationForm.tsx", "dest": "components/AIGenerationForm.tsx" },
+    { "src": "app/api/generate/route.ts", "dest": "app/api/generate/route.ts" },
+    { "src": "components/ResultsGallery.tsx", "dest": "components/ResultsGallery.tsx" },
+    { "src": "lib/ai-client.ts", "dest": "lib/ai-client.ts" }
+  ]
+}

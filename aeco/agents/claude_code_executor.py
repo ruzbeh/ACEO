@@ -1,4 +1,8 @@
-"""Execute AECO agents via the Claude Code CLI subprocess."""
+"""Execute AECO agents via the Claude Code CLI subprocess.
+
+NO FALLBACK TO LANGCHAIN. If Claude Code fails, the error propagates
+so we can see and fix it immediately.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -50,6 +54,9 @@ class ClaudeCodeExecutor:
     The CLI is invoked in non-interactive mode with --output-format json.
     The agent's system prompt is passed via --append-system-prompt,
     and the context is piped via stdin to avoid argument length limits.
+
+    NO FALLBACK. If Claude Code fails, we raise so the pipeline sees
+    the real error instead of silently degrading.
     """
 
     def __init__(self, agent_def: AgentDefinition, audit_logger: Any = None) -> None:
@@ -124,7 +131,10 @@ class ClaudeCodeExecutor:
         return cmd
 
     async def execute(self, context: dict[str, Any]) -> dict[str, Any]:
-        """Execute the agent via Claude Code CLI and return parsed response."""
+        """Execute the agent via Claude Code CLI and return parsed response.
+
+        Raises on failure — NO silent fallback.
+        """
         run_id = context.get("workflow_run_id")
         task_id = context.get("task_id")
         context_keys = [
@@ -156,174 +166,176 @@ class ClaudeCodeExecutor:
         logger.info(
             f"ClaudeCode: executing {self.agent_def.agent_id} "
             f"(max_turns={cfg.max_turns if cfg else 10}, timeout={timeout}s, "
-            f"tools={self._resolve_allowed_tools()})"
+            f"tools={self._resolve_allowed_tools()}, cwd={workspace or 'none'})"
         )
 
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=workspace or None,
-            )
-        except (FileNotFoundError, OSError, PermissionError) as exc:
-            logger.warning(
-                "Claude Code CLI failed to start (%s: %s); falling back to LangChain executor for %s",
-                type(exc).__name__,
-                exc,
-                self.agent_def.agent_id,
-            )
-            from aeco.agents.runtime import AgentRuntime
-            fallback = AgentRuntime(self.agent_def, self.audit_logger)
-            return await fallback.execute(context)
+        # Start the subprocess — NO fallback, raise on failure
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=workspace or None,
+        )
 
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 proc.communicate(input=prompt.encode()),
                 timeout=timeout,
             )
-
-            stdout = stdout_bytes.decode(errors="replace")
-            stderr = stderr_bytes.decode(errors="replace")
-
-            if proc.returncode != 0:
-                logger.error(
-                    f"ClaudeCode process exited with code {proc.returncode}: {stderr[:500]}"
-                )
-                raise RuntimeError(
-                    f"Claude Code CLI failed (exit {proc.returncode}): {stderr[:500]}"
-                )
-
-            # Parse the CLI JSON envelope
-            envelope = json.loads(stdout)
-            is_error = envelope.get("is_error", False)
-            result_text = envelope.get("result", "")
-
-            self.last_meta = ExecutionMeta(
-                cost_usd=envelope.get("cost_usd", 0.0),
-                duration_ms=envelope.get("duration_ms", 0),
-                num_turns=envelope.get("num_turns", 0),
-                session_id=envelope.get("session_id", ""),
-            )
-
-            if is_error:
-                raise RuntimeError(f"Claude Code returned error: {result_text[:500]}")
-
-            # Parse the agent's structured JSON from the result text
-            result = parse_agent_response(result_text or "")
-
-            # On parse failure or empty output: return fallback so pipeline gets usable artifacts
-            if result.get("parse_error") or not (result_text or "").strip():
-                logger.warning(
-                    "[%s] Claude Code result empty or not JSON (%d chars). Using fallback.",
-                    self.agent_def.agent_id,
-                    len(result_text or ""),
-                )
-                raw = result.get("raw_response") or result_text or ""
-                code_artifacts = extract_code_artifacts_from_text(raw)
-                summary = raw.strip()[:500] if raw else ""
-                result = {
-                    "decision": summary or "Task completed via Claude Code; no JSON summary returned.",
-                    "code_artifacts": code_artifacts,
-                    "assumptions": [],
-                    "risks": [],
-                    "confidence": 0.5,
-                }
-                log_agent_parse_result(
-                    agent_id=self.agent_def.agent_id,
-                    parse_ok=False,
-                    raw_length=len(result_text or ""),
-                    used_fallback=True,
-                    task_id=context.get("task_id"),
-                    run_id=context.get("workflow_run_id"),
-                )
-            else:
-                log_agent_parse_result(
-                    agent_id=self.agent_def.agent_id,
-                    parse_ok=True,
-                    raw_length=len(result_text or ""),
-                    used_fallback=False,
-                    task_id=context.get("task_id"),
-                    run_id=context.get("workflow_run_id"),
-                )
-
-            duration_ms = int((time.monotonic() - start_time) * 1000)
-
-            log_agent_end(
-                agent_id=self.agent_def.agent_id,
-                task_id=task_id,
-                run_id=run_id,
-                duration_ms=duration_ms,
-                success=True,
-                tokens_used=None,
-                output_summary=str(result)[:300],
-            )
-
-            if self.audit_logger:
-                _run_id = run_id
-                _task_id = task_id
-                _init_id = context.get("initiative_id")
-                if isinstance(_run_id, str) and _run_id:
-                    try:
-                        _run_id = uuid.UUID(_run_id)
-                    except ValueError:
-                        _run_id = None
-                if isinstance(_task_id, str) and _task_id:
-                    try:
-                        _task_id = uuid.UUID(_task_id)
-                    except ValueError:
-                        _task_id = None
-                if isinstance(_init_id, str) and _init_id:
-                    try:
-                        _init_id = uuid.UUID(_init_id)
-                    except ValueError:
-                        _init_id = None
-                await self.audit_logger.log(
-                    agent_id=self.agent_def.agent_id,
-                    action="claude_code_call",
-                    input_summary=prompt[:500],
-                    output_summary=str(result)[:500],
-                    workflow_run_id=_run_id,
-                    task_id=_task_id,
-                    initiative_id=_init_id,
-                    llm_provider="claude_code",
-                    llm_model=self.agent_def.claude_code_config.model if self.agent_def.claude_code_config else "default",
-                    tokens_used=None,
-                    duration_ms=duration_ms,
-                    success=True,
-                    extra={
-                        "cost_usd": self.last_meta.cost_usd,
-                        "num_turns": self.last_meta.num_turns,
-                        "session_id": self.last_meta.session_id,
-                    },
-                )
-
-            return result
-
         except asyncio.TimeoutError:
             duration_ms = int((time.monotonic() - start_time) * 1000)
+            try:
+                proc.kill()
+            except Exception:
+                pass
             log_agent_end(
                 agent_id=self.agent_def.agent_id,
-                task_id=task_id,
-                run_id=run_id,
-                duration_ms=duration_ms,
-                success=False,
-                error=f"Timeout after {timeout}s",
+                task_id=task_id, run_id=run_id,
+                duration_ms=duration_ms, success=False,
+                error=f"Claude Code timed out after {timeout}s",
             )
-            raise TimeoutError(
-                f"Claude Code execution timed out after {timeout}s "
-                f"for agent {self.agent_def.agent_id}"
+            raise RuntimeError(
+                f"Claude Code timed out after {timeout}s for agent {self.agent_def.agent_id}"
             )
 
-        except Exception as e:
-            duration_ms = int((time.monotonic() - start_time) * 1000)
+        stdout = stdout_bytes.decode(errors="replace")
+        stderr = stderr_bytes.decode(errors="replace")
+        duration_ms = int((time.monotonic() - start_time) * 1000)
+
+        if proc.returncode != 0:
             log_agent_end(
                 agent_id=self.agent_def.agent_id,
-                task_id=task_id,
-                run_id=run_id,
-                duration_ms=duration_ms,
-                success=False,
-                error=str(e),
+                task_id=task_id, run_id=run_id,
+                duration_ms=duration_ms, success=False,
+                error=f"Claude Code exit {proc.returncode}: {stderr[:500]}",
             )
-            raise
+            raise RuntimeError(
+                f"Claude Code failed for {self.agent_def.agent_id} "
+                f"(exit {proc.returncode}): {stderr[:500]}"
+            )
+
+        # Parse the CLI JSON envelope
+        try:
+            envelope = json.loads(stdout)
+        except json.JSONDecodeError:
+            log_agent_end(
+                agent_id=self.agent_def.agent_id,
+                task_id=task_id, run_id=run_id,
+                duration_ms=duration_ms, success=False,
+                error=f"Non-JSON stdout ({len(stdout)} bytes)",
+            )
+            raise RuntimeError(
+                f"Claude Code returned non-JSON for {self.agent_def.agent_id} "
+                f"({len(stdout)} bytes). First 300 chars: {stdout[:300]}"
+            )
+
+        is_error = envelope.get("is_error", False)
+        result_text = envelope.get("result", "")
+
+        self.last_meta = ExecutionMeta(
+            cost_usd=envelope.get("total_cost_usd", envelope.get("cost_usd", 0.0)),
+            duration_ms=envelope.get("duration_ms", 0),
+            num_turns=envelope.get("num_turns", 0),
+            session_id=envelope.get("session_id", ""),
+        )
+
+        if is_error:
+            log_agent_end(
+                agent_id=self.agent_def.agent_id,
+                task_id=task_id, run_id=run_id,
+                duration_ms=duration_ms, success=False,
+                error=f"Claude Code is_error=true: {result_text[:300]}",
+            )
+            raise RuntimeError(
+                f"Claude Code returned error for {self.agent_def.agent_id}: {result_text[:500]}"
+            )
+
+        # Parse the agent's structured JSON from the result text
+        result = parse_agent_response(result_text or "")
+
+        # On parse failure or empty output: build best-effort result but DON'T crash
+        if result.get("parse_error") or not (result_text or "").strip():
+            logger.warning(
+                "[%s] Claude Code result did not parse as JSON (%d chars). Building fallback result.",
+                self.agent_def.agent_id,
+                len(result_text or ""),
+            )
+            raw = result.get("raw_response") or result_text or ""
+            code_artifacts = extract_code_artifacts_from_text(raw)
+            summary = raw.strip()[:500] if raw else ""
+            result = {
+                "decision": summary or "Task completed via Claude Code; no JSON summary returned.",
+                "code_artifacts": code_artifacts,
+                "assumptions": [],
+                "risks": [],
+                "confidence": 0.5,
+            }
+            log_agent_parse_result(
+                agent_id=self.agent_def.agent_id,
+                parse_ok=False,
+                raw_length=len(result_text or ""),
+                used_fallback=True,
+                task_id=context.get("task_id"),
+                run_id=context.get("workflow_run_id"),
+            )
+        else:
+            log_agent_parse_result(
+                agent_id=self.agent_def.agent_id,
+                parse_ok=True,
+                raw_length=len(result_text or ""),
+                used_fallback=False,
+                task_id=context.get("task_id"),
+                run_id=context.get("workflow_run_id"),
+            )
+
+        log_agent_end(
+            agent_id=self.agent_def.agent_id,
+            task_id=task_id,
+            run_id=run_id,
+            duration_ms=duration_ms,
+            success=True,
+            tokens_used=None,
+            output_summary=str(result)[:300],
+        )
+
+        logger.info(
+            "ClaudeCode: %s completed in %dms ($%.4f, %d turns)",
+            self.agent_def.agent_id,
+            self.last_meta.duration_ms,
+            self.last_meta.cost_usd,
+            self.last_meta.num_turns,
+        )
+
+        if self.audit_logger:
+            _run_id = run_id
+            _task_id = task_id
+            _init_id = context.get("initiative_id")
+            for attr_name in ("_run_id", "_task_id", "_init_id"):
+                val = locals()[attr_name]
+                if isinstance(val, str) and val:
+                    try:
+                        locals()[attr_name] = uuid.UUID(val)
+                    except ValueError:
+                        locals()[attr_name] = None
+            await self.audit_logger.log(
+                agent_id=self.agent_def.agent_id,
+                action="claude_code_call",
+                input_summary=prompt[:500],
+                output_summary=str(result)[:500],
+                workflow_run_id=_run_id,
+                task_id=_task_id,
+                initiative_id=_init_id,
+                llm_provider="claude_code",
+                llm_model=self.agent_def.claude_code_config.model if self.agent_def.claude_code_config else "default",
+                tokens_used=None,
+                duration_ms=duration_ms,
+                success=True,
+                extra={
+                    "cost_usd": self.last_meta.cost_usd,
+                    "num_turns": self.last_meta.num_turns,
+                    "session_id": self.last_meta.session_id,
+                },
+            )
+
+        return result

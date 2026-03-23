@@ -24,6 +24,8 @@ import {
   Skull,
   Scale,
   AlertCircle,
+  ScrollText,
+  X,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -31,6 +33,8 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Spinner } from '../components/ui/Spinner';
 import { EmptyState } from '../components/ui/EmptyState';
+import { ScreenshotUpload } from '../components/ui/ScreenshotUpload';
+import type { ScreenshotUploadData } from '../components/ui/ScreenshotUpload';
 import { cn } from '../lib/utils';
 import { WORKSPACE_PRESETS } from '../lib/constants';
 import {
@@ -79,6 +83,7 @@ function RunPortfolioForm() {
   const [budget, setBudget] = useState('1000');
   const [workspacePreset, setWorkspacePreset] = useState<string>('');
   const [workspacePath, setWorkspacePath] = useState('');
+  const [refScreenshots, setRefScreenshots] = useState<ScreenshotUploadData[]>([]);
   const runMutation = useRunPortfolio();
 
   const effectiveWorkspacePath =
@@ -137,6 +142,35 @@ function RunPortfolioForm() {
               onChange={(e) => setWorkspacePath(e.target.value)}
               placeholder="/absolute/path/to/project"
             />
+          )}
+        </div>
+        <div>
+          <ScreenshotUpload
+            compact
+            label="Reference Screenshots (optional)"
+            placeholder="Describe what should change in this UI…"
+            onUpload={(data) => setRefScreenshots((prev) => [...prev, data])}
+          />
+          {refScreenshots.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {refScreenshots.map((s, i) => (
+                <div key={i} className="relative group">
+                  <img
+                    src={URL.createObjectURL(s.file)}
+                    alt={s.feedback || `Ref ${i + 1}`}
+                    className="h-10 w-10 rounded border border-border object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setRefScreenshots((prev) => prev.filter((_, j) => j !== i))}
+                    className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white group-hover:flex"
+                    title="Remove"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -369,7 +403,10 @@ function PortfolioDetail({ portfolioId, run }: { portfolioId: string; run?: Port
         {/* Execution Results */}
         <ResultsSection status={status} />
 
-        {/* Activity Log */}
+        {/* Live company JSON log (agent/tool/node) — WebSocket + fast poll */}
+        <LiveCompanyLogSection status={status} />
+
+        {/* High-level orchestrator messages (graph state) */}
         <ActivityLogSection status={status} />
 
         {/* Errors */}
@@ -740,7 +777,60 @@ function ResultsSection({ status }: { status: PortfolioStatusResponse }) {
   );
 }
 
-/* ─── Activity Log ─── */
+/* ─── Live trace (company JSON log) ─── */
+
+const LIVE_CAT_STYLES: Record<string, string> = {
+  agent: 'text-cyan-400',
+  tool: 'text-amber-400',
+  state: 'text-blue-400',
+  workflow: 'text-purple-400',
+  error: 'text-red-400',
+};
+
+function formatLiveLogLine(entry: Record<string, unknown>): string {
+  const ts = typeof entry.ts === 'string' ? entry.ts.slice(11, 23) : '';
+  const cat = String(entry.cat ?? '');
+  const ev = String(entry.event ?? '');
+  const rest = { ...entry };
+  delete rest.ts;
+  delete rest.cat;
+  delete rest.event;
+  const tail = Object.keys(rest).length ? ` ${JSON.stringify(rest)}` : '';
+  return `${ts} [${cat}/${ev}]${tail}`;
+}
+
+function LiveCompanyLogSection({ status }: { status: PortfolioStatusResponse }) {
+  const lines = status.live_log ?? [];
+  const isRunning = status.status === 'running';
+  if (lines.length === 0 && !isRunning) return null;
+
+  return (
+    <Collapsible
+      title="Live trace"
+      icon={ScrollText}
+      count={lines.length}
+      defaultOpen={isRunning}
+    >
+      {lines.length === 0 ? (
+        <p className="text-xs text-gray-500 italic">Waiting for agent, tool, and node activity…</p>
+      ) : (
+        <div className="max-h-96 overflow-y-auto space-y-0.5 pr-1 font-mono text-[10px] leading-relaxed">
+          {lines.map((entry, i) => {
+            const cat = String((entry as Record<string, unknown>).cat ?? '');
+            const styleClass = LIVE_CAT_STYLES[cat] || 'text-gray-400';
+            return (
+              <div key={i} className={cn('break-all rounded px-0.5 py-0.5', styleClass)}>
+                {formatLiveLogLine(entry as Record<string, unknown>)}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Collapsible>
+  );
+}
+
+/* ─── Activity Log (orchestrator messages) ─── */
 
 const MSG_TYPE_STYLES: Record<string, string> = {
   phase_start: 'text-blue-400 font-semibold',
@@ -793,7 +883,7 @@ function formatMsgContent(msg: PortfolioMessage): string {
 function ActivityLogSection({ status }: { status: PortfolioStatusResponse }) {
   if (status.messages.length === 0) return null;
   return (
-    <Collapsible title="Activity Log" icon={MessageSquare} count={status.messages.length} defaultOpen={status.status === 'running'}>
+    <Collapsible title="Orchestrator messages" icon={MessageSquare} count={status.messages.length} defaultOpen={status.status === 'running'}>
       <div className="max-h-80 overflow-y-auto space-y-0.5 pr-1 font-mono">
         {status.messages.map((msg, i) => {
           const type = msg.type || '';

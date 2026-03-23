@@ -105,20 +105,6 @@ async def _agent_performance(
     stmt = select(
         AuditLogEntry.agent_id,
         func.count(AuditLogEntry.id).label("total_calls"),
-        func.sum(func.cast(AuditLogEntry.success, sa.Integer)).label("successful"),
-        func.avg(AuditLogEntry.duration_ms).label("avg_duration_ms"),
-        func.avg(AuditLogEntry.tokens_used).label("avg_tokens"),
-        func.sum(AuditLogEntry.tokens_used).label("total_tokens"),
-    ).group_by(AuditLogEntry.agent_id)
-
-    if agent_id:
-        stmt = stmt.where(AuditLogEntry.agent_id == agent_id)
-
-    # Need sa for the cast
-    import sqlalchemy as sa
-    stmt = select(
-        AuditLogEntry.agent_id,
-        func.count(AuditLogEntry.id).label("total_calls"),
         func.avg(AuditLogEntry.duration_ms).label("avg_duration_ms"),
         func.avg(AuditLogEntry.tokens_used).label("avg_tokens"),
         func.sum(AuditLogEntry.tokens_used).label("total_tokens"),

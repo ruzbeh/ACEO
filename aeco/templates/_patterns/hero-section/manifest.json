@@ -1,0 +1,13 @@
+{
+  "name": "hero-section",
+  "description": "Full-width hero with gradient background and CTA",
+  "files": [
+    { "src": "HeroSection.tsx", "dest": "{{TARGET_PATH}}" }
+  ],
+  "variables": [
+    "HEADLINE",
+    "SUBHEADLINE",
+    "CTA_TEXT",
+    "CTA_LINK"
+  ]
+}

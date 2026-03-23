@@ -60,6 +60,8 @@ class Initiative(Base):
     evaluation_window_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     rollout_plan: Mapped[dict] = mapped_column(JSON, default=dict)  # stages, rollback triggers
     task_graph_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)  # for audit
+    #: Set when POST /initiatives/run succeeds (each new workflow run updates this).
+    run_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

@@ -1,0 +1,8 @@
+{
+  "name": "file-upload",
+  "description": "Drag-and-drop file upload zone with validation and preview",
+  "files": [
+    { "src": "FileUploadZone.tsx", "dest": "{{TARGET_PATH}}" }
+  ],
+  "variables": []
+}

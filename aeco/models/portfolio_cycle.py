@@ -120,4 +120,5 @@ class PortfolioCycle(Base):
             "results": snap.get("execution_results", []),
             "errors": snap.get("errors", []),
             "messages": snap.get("messages", []),
+            "live_log": snap.get("live_log", []),
         }

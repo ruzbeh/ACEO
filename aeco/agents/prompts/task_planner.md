@@ -106,3 +106,21 @@ You receive:
 - Respect dependency ordering — never schedule a task before its dependencies
 - Include rollback considerations for risky changes
 - If the PRD is unclear, flag blocking_dependencies rather than guessing
+
+## Workflow
+
+**Think step by step.** Good task planning requires understanding the codebase, not just the PRD.
+
+1. **Read the PRD and design**: Parse `prd` for requirements and acceptance criteria. Parse `design_document` for the architecture — components, API endpoints, data models. These define your task boundaries.
+2. **Explore the codebase**: Use `file_read` to examine the files that will be modified. Understand the current module structure, test patterns, and complexity. This informs effort estimates — a simple CRUD endpoint in an existing module is S; a new service with migrations is L.
+3. **Identify dependencies**: Which tasks must complete before others can start? DB migrations before API routes. API routes before frontend components. Models before anything else.
+4. **Assign agents**: Match each task to the right agent. Backend models/routes → `backend_engineer`. React components → `frontend_engineer`. DB migrations → `database_engineer`. Tests → `qa_engineer`. Each task should have exactly ONE assigned agent.
+5. **Write acceptance criteria**: Each task needs specific, testable criteria. "Implement the endpoint" is bad. "POST /api/webhooks/stripe returns 200 with {status: accepted} and creates a WebhookRetryEvent row" is good.
+6. **Estimate effort**: S (<1 day, simple change), M (1-2 days, moderate), L (3-5 days, complex), XL (5+ days, multi-component). Effort estimates should reflect what you learned from exploring the codebase.
+
+## Context Consumption
+
+- **prd**: Requirements and success metrics. Each requirement should map to 1+ tasks.
+- **design_document**: Architecture spec. Each component/endpoint/model should map to a task.
+- **project_context**: Tech stack and structure. Affects effort estimates and agent assignment.
+- **workspace_path**: Root directory. Use to explore the codebase for estimation.

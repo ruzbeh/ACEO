@@ -30,26 +30,35 @@ class Settings(BaseSettings):
     cors_origins: str = ""
 
     # Claude Code CLI
-    claude_code_binary: str = "claude"
+    claude_code_binary: str = "/Users/ruzbeh.i/Library/Application Support/Claude/claude-code/2.1.78/claude.app/Contents/MacOS/claude"
     claude_code_default_timeout: int = 300
 
     # Initiative workflow: max seconds per task so one agent can't hang the whole run
     initiative_task_timeout_seconds: int = 600
 
     # Facebook/Meta Ads API
+    facebook_app_id: Optional[str] = None
+    facebook_app_secret: Optional[str] = None
     facebook_access_token: Optional[str] = None
     facebook_ad_account_id: str = ""
 
     # Stripe API
     stripe_api_key: Optional[str] = None
 
+    # Resend email API
+    resend_api_key: Optional[str] = None
+    resend_from_email: str = "onboarding@resend.dev"
+
     # WhatsApp Business API (uses Meta Cloud API)
     whatsapp_token: Optional[str] = None
     whatsapp_phone_number_id: str = ""
     whatsapp_recipient_number: str = ""  # Your phone number in international format (e.g. 14155551234)
 
+    # Postmortem Writer: optional base URL(s) for screenshots (e.g. http://localhost:8000/dashboard/)
+    postmortem_dashboard_base_url: str = ""
+
     # App
-    workspace_path: str = "./workspace"
+    workspace_path: str = "/Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio"
     log_level: str = "INFO"
     log_path: Optional[str] = "logs/aeco.log"  # app log file; set empty to disable
 

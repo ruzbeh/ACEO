@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "aeco-server",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "uvicorn", "aeco.main:app", "--host", "0.0.0.0", "--port", "8100"],
+      "port": 8100
+    },
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["dashboard/start-dev.sh"],
+      "port": 5173
+    }
+  ]
+}

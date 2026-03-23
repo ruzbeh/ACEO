@@ -269,9 +269,43 @@ def scan_workspace(workspace_path: str) -> dict[str, Any]:
         "has_ci": has_ci,
     }
 
+    # 6. Read .aeco.yaml project config if present
+    aeco_config = _read_aeco_config(workspace)
+    if aeco_config:
+        result["aeco_config"] = aeco_config
+        # Merge goals and metrics into top-level for easy agent access
+        if aeco_config.get("goals"):
+            result["company_goals"] = aeco_config["goals"]
+        if aeco_config.get("north_star_metric"):
+            result["north_star_metric"] = aeco_config["north_star_metric"]
+        if aeco_config.get("constraints"):
+            result["constraints"] = aeco_config["constraints"]
+        if aeco_config.get("integrations"):
+            result["integrations"] = aeco_config["integrations"]
+
     logger.info(
         f"Workspace scan complete: {product_name}, "
         f"{len(tech_stack)} tech stack items, {file_count} files"
     )
 
     return result
+
+
+def _read_aeco_config(workspace: Path) -> dict[str, Any] | None:
+    """Read .aeco.yaml project configuration if present."""
+    config_path = workspace / ".aeco.yaml"
+    if not config_path.exists():
+        config_path = workspace / ".aeco.yml"
+    if not config_path.exists():
+        return None
+
+    try:
+        import yaml
+        content = config_path.read_text(encoding="utf-8")
+        config = yaml.safe_load(content)
+        if isinstance(config, dict):
+            logger.info(f"Loaded .aeco.yaml from {workspace}")
+            return config
+    except Exception as e:
+        logger.warning(f"Failed to read .aeco.yaml: {e}")
+    return None

@@ -27,6 +27,13 @@ class ClickUpClient:
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict:
         response = await self._client.request(method, path, **kwargs)
+        if response.status_code == 401:
+            raise httpx.HTTPStatusError(
+                "ClickUp API returned 401 Unauthorized. "
+                "Check CLICKUP_API_TOKEN in .env — use a valid token from ClickUp → Settings → Apps → API Token.",
+                request=response.request,
+                response=response,
+            )
         response.raise_for_status()
         return response.json()
 

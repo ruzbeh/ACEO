@@ -9,9 +9,17 @@ from __future__ import annotations
 import json
 import logging
 import sys
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+# Set for the duration of an async portfolio workflow so all company_log lines
+# (agents, tools, nodes) are attributed to that portfolio run.
+portfolio_run_id: ContextVar[str | None] = ContextVar("portfolio_run_id", default=None)
+
+# Set during initiative graph execution so agent/tool/node logs stream to initiative live log.
+initiative_run_id: ContextVar[str | None] = ContextVar("initiative_run_id", default=None)
 
 # Module-level logger; configured by init_company_logging()
 _company_logger: logging.Logger | None = None
@@ -31,14 +39,26 @@ def _serialize(obj: Any) -> Any:
 
 def _emit(category: str, event: str, **payload: Any) -> None:
     """Emit one structured log line."""
-    if _company_logger is None or not _company_logger.handlers:
-        return
     record = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "cat": category,
         "event": event,
         **_serialize(payload),
     }
+    pid = portfolio_run_id.get() or payload.get("portfolio_id")
+    if pid:
+        from aeco.logging.portfolio_live_buffer import append_portfolio_live_line
+
+        append_portfolio_live_line(pid, record)
+
+    iid = initiative_run_id.get() or payload.get("initiative_id")
+    if iid:
+        from aeco.logging.initiative_live_buffer import append_initiative_live_line
+
+        append_initiative_live_line(str(iid), record)
+
+    if _company_logger is None or not _company_logger.handlers:
+        return
     msg = json.dumps(record, default=str)
     _company_logger.log(logging.INFO, msg)
 
@@ -46,6 +66,20 @@ def _emit(category: str, event: str, **payload: Any) -> None:
 def company_log(category: str, event: str, **payload: Any) -> None:
     """Emit a company log entry (workflow | agent | tool | state | error)."""
     _emit(category, event, **payload)
+
+
+def log_initiative_node(node: str, summary: str = "", initiative_id: str | None = None) -> None:
+    """Structured step line for the initiative graph (shows in live trace)."""
+    iid = initiative_id or initiative_run_id.get()
+    if not iid:
+        return
+    company_log(
+        "state",
+        "initiative_node",
+        initiative_id=iid,
+        node=node,
+        summary=summary[:500],
+    )
 
 
 # --- Workflow ---
@@ -212,6 +246,27 @@ def log_agent_tool_round(
         round_index=round_index,
         success=success,
         error=error,
+    )
+
+
+def log_agent_parse_result(
+    agent_id: str,
+    parse_ok: bool,
+    raw_length: int,
+    used_fallback: bool = False,
+    task_id: str | None = None,
+    run_id: str | None = None,
+) -> None:
+    """Baseline metric: whether agent output parsed as JSON. Enables parse-error rate tracking."""
+    company_log(
+        "agent",
+        "parse_result",
+        agent_id=agent_id,
+        parse_ok=parse_ok,
+        raw_length=raw_length,
+        used_fallback=used_fallback,
+        task_id=task_id,
+        run_id=run_id,
     )
 
 

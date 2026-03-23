@@ -10,40 +10,56 @@ A system that **builds and evolves products** must own:
 
 | Loop | What | Current AECO |
 |------|------|--------------|
-| 1. **Opportunity discovery** | What should be built | ❌ Missing |
+| 1. **Opportunity discovery** | What should be built | ✅ CEO / Portfolio Director + Product Strategist (portfolio workflow) |
 | 2. **Planning** | Why this is the right move | ✅ PM Agent + Task Planner + Context Builder |
-| 3. **Execution** | Design, code, test, ship | ✅ Strong (task + initiative graphs) |
-| 4. **Measurement** | Did it work | ✅ Evaluator + metrics_read + agent_logs_read |
+| 3. **Execution** | Design, code, test, ship | ✅ Strong (task + initiative + portfolio graphs) |
+| 4. **Measurement** | Did it work | ✅ Evaluator + metrics_read + agent_logs_read + Stripe/Facebook analytics |
 | 5. **Adaptation** | What changes next | ✅ scale/iterate/kill + postmortem writer + decision ledger |
 
-Loop 1 remains the main gap. Loops 2-5 are now structurally in place via the initiative workflow.
+All five loops are now structurally in place. The portfolio workflow (CEO + Product Strategist) closes loop 1.
 
 ---
 
-## 2. Org chart (four layers)
+## 2. Org chart (5 departments + executive layer)
 
 ### Executive layer (direction)
-- **CEO / Portfolio Director**: company goals, portfolio bets
+- **CEO / Portfolio Director**: company goals, portfolio bets, initiative selection
 - **Product Strategist**: goals → product opportunities
-- **Finance / Budget Controller**: spend caps, ROI gates
-- **Program Manager**: initiatives → operating cadence
 
-### Product management layer (what & why)
-- **PM Agent**: problem statements, PRDs, success metrics
-- **Research Agent**: docs, tickets, logs, analytics, feedback
-- **Growth / Experiment Agent**: experiments, funnels, A/B
-
-### Technical management layer (how)
-- **Tech Lead Agent**: implementation plan, sequencing
-- **Chief Architect**: system design, contracts, long-horizon
-- **Task Planner**: work → executable units
+### Engineering department (10 agents + team lead)
+- **Engineering Lead** (team lead) → manages all engineering specialists
+- **Chief Architect**: system design, contracts
+- **Backend Engineer**, **Frontend Engineer**, **Fullstack Engineer**: implementation
+- **Database Engineer**, **API Engineer**: data & interface layer
+- **Infrastructure Engineer**, **DevOps Engineer**: deployment & infra
+- **QA Engineer**: review & tests
 - **Release Manager**: merge, rollout, rollback
 
-### Execution + oversight layer (do & judge)
-- Backend / Frontend / DevOps / QA / Security Reviewer
-- **Evaluator / Critic**
-- **Analytics Agent**
-- **Incident Investigator**
+### Product department (5 agents + team lead)
+- **Product Lead** (team lead)
+- **PM Agent**: PRDs, success metrics
+- **Task Planner**: task graphs, dependencies
+- **UX Researcher**, **Data Analyst**, **Product Designer**: research & design
+
+### Marketing department (6 agents + team lead)
+- **Marketing Lead** (team lead)
+- **Growth Marketing Agent**, **Content Creator**
+- **Facebook Ads Specialist**, **Email Marketer**, **SEO Specialist**, **Landing Page Designer**
+
+### Revenue & Customer department (5 agents + team lead)
+- **Revenue Lead** (team lead)
+- **Customer Success Agent**, **Revenue Analyst**
+- **Pricing Analyst**, **Retention Specialist**, **Onboarding Specialist**
+
+### Operations department (7 agents + team lead)
+- **Operations Lead** (team lead)
+- **COO Orchestrator**: routes every task step
+- **Budget Controller**: spend approval, anomaly detection
+- **Analytics Agent**, **Evaluator**, **Security Reviewer**
+- **Postmortem Writer**, **Incident Investigator**, **Experiment Agent**
+- **Compliance Reviewer**, **Cost Optimizer**
+
+**Total: 48 specialists + 5 team leads + 2 executives = 55 agents**
 
 ---
 
@@ -214,35 +230,71 @@ The **kill** branch is essential.
 - ✅ Evaluator prompt upgraded for initiative verdicts (scale/iterate/kill + assumption validation)
 - ✅ Alembic migration 003 for budget, decision_ledger, projects, initiative_id FK
 - ✅ Integration tests for both orchestrator graphs (graph compilation, edge routing, agent/tool completeness)
-- Security Reviewer agent (deferred to Phase 2)
 
-### Phase 2 — Governance hardening (NEXT)
-- Security Reviewer agent
-- Incident Investigator
-- Experiment Agent (A/B testing, funnels)
-- Blast-radius-based approval policies
-- Real-time monitoring dashboard (WebSocket)
+### Phase 2 — Governance hardening (DONE)
+- ✅ Security Reviewer agent
+- ✅ Incident Investigator
+- ✅ Experiment Agent (A/B testing, funnels)
+- ✅ Compliance Reviewer + Cost Optimizer
+- ✅ Real-time monitoring dashboard (WebSocket)
 
-### Phase 3 — Portfolio autonomy
-- CEO / Portfolio Director, Product Strategist
-- Multi-initiative prioritization, resource allocation
-- Opportunity discovery loop (loop 1)
-- Initiative kill/continue scaling logic
-**Goal:** System chooses among multiple bets.
+### Phase 3 — Portfolio autonomy (DONE)
+- ✅ CEO / Portfolio Director, Product Strategist
+- ✅ Multi-initiative prioritization, resource allocation
+- ✅ Portfolio workflow graph (`POST /api/portfolio/run`)
+- ✅ Approval workflow for founder-gated decisions
+- ✅ Persistent portfolio state + Dockerization
+
+### Phase 4 — Agent Teams & Departments (DONE)
+- ✅ 5 departments with team leads (Engineering, Product, Marketing, Revenue, Operations)
+- ✅ 21 new specialist agents (48 total specialists)
+- ✅ Team lead delegation pattern
+- ✅ Standardized JSON output across all 23+ agent prompts
+
+### Phase 5 — Revenue & Growth (DONE)
+- ✅ Marketing department: Facebook Ads, email, SEO, content, landing pages
+- ✅ Revenue department: customer success, pricing, retention, onboarding
+- ✅ Stripe integration (MRR, revenue, churn, customers)
+- ✅ Facebook/Meta Ads integration (campaigns, insights)
+- ✅ WhatsApp notifications for founder alerts
+
+### Phase 6 — Autonomous Operation (DONE)
+- ✅ Async scheduler engine with cron parsing (`aeco/scheduler/engine.py`)
+- ✅ Metric trigger system — auto-starts portfolio cycles on churn spikes, MRR drops, ad anomalies, error rate spikes (`aeco/scheduler/triggers.py`)
+- ✅ Scheduler + trigger CRUD API routes (`/api/scheduler/jobs`, `/api/scheduler/triggers`)
+- ✅ Telemetry pipeline: ingest + query product metrics with aggregations + trend analysis (`aeco/tools/telemetry_tools.py`)
+- ✅ Telemetry API routes (`/api/telemetry/events`, `/api/telemetry/query`, `/api/telemetry/metrics`)
+- ✅ Prompt Optimizer agent — reads postmortems + error data, proposes targeted prompt patches
+- ✅ Prompt patcher runtime injection — approved patches injected into agent prompts without file edits (`aeco/agents/prompt_patcher.py`)
+- ✅ Prompt patch management API (`/api/prompt-patches` with approve/reject workflow)
+- ✅ `.aeco.yaml` project config support — goals, metrics, constraints auto-injected into agent context
+- ✅ Workspace scanner reads `.aeco.yaml` for product-specific configuration
+- ✅ Evaluator, data analyst, revenue analyst upgraded with telemetry_query access
+- ✅ Alembic migration 004 for scheduler, triggers, patches, telemetry tables
+
+### Phase 7 — Next
+- Multi-product portfolio management (parallel product workspaces)
+- Advanced experiment framework (feature flags + A/B testing with statistical significance)
+- External trigger integrations (Stripe webhooks, Slack commands)
+- Agent capability benchmarking (automated eval suites)
 
 ---
 
-## 13. Ordered next steps (immediate)
+## 13. Completed milestones
 
-1. ~~Redefine top-level object from **task** to **initiative**.~~ DONE — `Initiative` model + `InitiativeState` + initiative graph
-2. ~~Add **PM Agent** and **Analytics Agent** before more engineers.~~ DONE — PM Agent + Task Planner registered
-3. ~~Create **Decision Ledger** and canonical product/architecture summaries.~~ DONE — `DecisionRecord` model + `DecisionLedgerStore`
-4. ~~Replace simple route loop with **initiative task graph** orchestration.~~ DONE — `build_initiative_graph()` with PM → Architect → TaskPlanner → Execute → Evaluate loop
-5. ~~Add **Release Manager** + staged rollout + rollback logic.~~ DONE — Release Manager + Postmortem Writer registered
-6. ~~Add **Evaluator** that decides scale / iterate / kill.~~ DONE — evaluate node with verdict + iteration loop
-7. Only then add executive autonomy for portfolio selection.
-
-**Do not add more builder agents before evaluation and governance.**
+1. ~~Redefine top-level object from **task** to **initiative**.~~ DONE
+2. ~~Add **PM Agent** and **Analytics Agent** before more engineers.~~ DONE
+3. ~~Create **Decision Ledger** and canonical product/architecture summaries.~~ DONE
+4. ~~Replace simple route loop with **initiative task graph** orchestration.~~ DONE
+5. ~~Add **Release Manager** + staged rollout + rollback logic.~~ DONE
+6. ~~Add **Evaluator** that decides scale / iterate / kill.~~ DONE
+7. ~~Add executive autonomy for portfolio selection.~~ DONE — CEO + Product Strategist + Portfolio workflow
+8. ~~Scale to 5 departments with team leads.~~ DONE — 55 agents total
+9. ~~Add revenue & growth integrations.~~ DONE — Stripe, Facebook Ads, WhatsApp
+10. ~~Add autonomous scheduler + metric triggers.~~ DONE — cron scheduler, metric triggers, auto-portfolio-cycles
+11. ~~Add self-improving agent prompts.~~ DONE — Prompt Optimizer agent, runtime patch injection, approve/reject workflow
+12. ~~Add telemetry pipeline.~~ DONE — ingest, query, aggregation, trend analysis, Stripe/FB connectors
+13. ~~Add `.aeco.yaml` project config.~~ DONE — goals, metrics, constraints auto-injected
 
 ---
 
@@ -269,17 +321,20 @@ Rationale: Maximum autonomy without governance produces more bad decisions and u
 *This document is the single source of truth for “what we’re building toward.”*
 
 **Key implementation files:**
+- Agent definitions: `aeco/agents/definitions/v1_agents.yaml` (all 55 agents)
+- Agent prompts: `aeco/agents/prompts/` (23+ prompt files)
 - Initiative model: `aeco/models/initiative.py`
 - Structured agent output: `aeco/models/agent_output.py`
 - Decision ledger: `aeco/models/decision_ledger.py`, `aeco/memory/decision_ledger.py`
 - Context builder: `aeco/context/builder.py`
-- Initiative orchestrator: `aeco/orchestrator/initiative_graph.py`, `initiative_nodes.py`, `initiative_state.py`
+- Orchestrators: `aeco/orchestrator/` (task, initiative, portfolio graphs)
 - Budget engine: `aeco/budget/engine.py`
-- Metrics tools: `aeco/tools/metrics_tools.py`
-- PM Agent: `aeco/agents/prompts/pm_agent.md`
-- Task Planner: `aeco/agents/prompts/task_planner.md`
-- Release Manager: `aeco/agents/prompts/release_manager.md`
-- Postmortem Writer: `aeco/agents/prompts/postmortem_writer.md`
-- Initiative API: `aeco/api/routes_initiatives.py`
-- Budget API: `aeco/api/routes_budget.py`
-- Migrations: `alembic/versions/003_add_budget_decision_ledger_initiative_fk.py`
+- Tools: `aeco/tools/` (file, code, clickup, budget, metrics, facebook, stripe, whatsapp)
+- API routes: `aeco/api/` (tasks, workflows, agents, initiatives, portfolio, budget, projects, webhooks, ws)
+- Dashboard: `dashboard/src/pages/` (9 pages: Tasks, Agents, Initiatives, Portfolio, Budget, Company)
+- Scheduler: `aeco/scheduler/engine.py`, `aeco/scheduler/triggers.py`
+- Telemetry: `aeco/tools/telemetry_tools.py`, `aeco/api/routes_telemetry.py`
+- Prompt patches: `aeco/agents/prompt_patcher.py`, `aeco/api/routes_prompt_patches.py`
+- Prompt optimizer: `aeco/agents/prompts/prompt_optimizer.md`
+- Scheduler API: `aeco/api/routes_scheduler.py`
+- Migrations: `alembic/versions/`

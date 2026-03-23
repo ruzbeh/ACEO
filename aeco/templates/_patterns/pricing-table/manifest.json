@@ -1,0 +1,15 @@
+{
+  "name": "pricing-table",
+  "description": "3-tier pricing with Stripe checkout",
+  "files": [
+    { "src": "PricingTable.tsx", "dest": "{{TARGET_PATH}}" }
+  ],
+  "variables": [
+    "PLAN_1_NAME",
+    "PLAN_1_PRICE",
+    "PLAN_2_NAME",
+    "PLAN_2_PRICE",
+    "PLAN_3_NAME",
+    "PLAN_3_PRICE"
+  ]
+}

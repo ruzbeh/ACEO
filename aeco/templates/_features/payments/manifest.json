@@ -1,0 +1,9 @@
+{
+  "name": "payments",
+  "description": "Stripe checkout + subscription management",
+  "files": [
+    { "src": "components/PricingTable.tsx", "dest": "components/PricingTable.tsx" },
+    { "src": "app/api/stripe/portal/route.ts", "dest": "app/api/stripe/portal/route.ts" },
+    { "src": "lib/stripe-helpers.ts", "dest": "lib/stripe-helpers.ts" }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "stripe-webhook",
+  "description": "Complete Stripe webhook handler with signature verification and Supabase DB updates",
+  "files": [
+    { "src": "stripe-webhook-handler.ts", "dest": "{{TARGET_PATH}}" }
+  ],
+  "variables": []
+}

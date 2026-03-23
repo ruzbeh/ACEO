@@ -22,7 +22,11 @@ export function usePortfolioRuns() {
   return useQuery({
     queryKey: ['portfolio'],
     queryFn: () => api.get<PortfolioListItem[]>('/portfolio'),
-    refetchInterval: 30_000,
+    refetchInterval: (query) => {
+      const runs = query.state.data ?? [];
+      const hasRunning = runs.some((r) => r.status === 'running');
+      return hasRunning ? 5_000 : 15_000;
+    },
   });
 }
 
@@ -44,7 +48,8 @@ export function usePortfolioStatus(portfolioId: string | undefined) {
     enabled: !!portfolioId,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return status === 'running' ? 5_000 : 30_000;
+      // WebSocket invalidates on portfolio.*; this is fallback when WS unavailable
+      return status === 'running' ? 2_000 : 30_000;
     },
   });
 }

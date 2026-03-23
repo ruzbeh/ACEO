@@ -1,6 +1,6 @@
 agents:
   # ═══════════════════════════════════════════════════════════════
-  # EXECUTIVE / STRATEGY — langchain executor (pure thinking, no file ops)
+  # EXECUTIVE / STRATEGY — claude_code (FREE on Max plan)
   # ═══════════════════════════════════════════════════════════════
 
   - agent_id: product_strategist
@@ -8,7 +8,11 @@ agents:
     role: strategist
     department: executive
     system_prompt_path: aeco/agents/prompts/product_strategist.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 5
+      timeout_seconds: 300
+      allowed_tools: [Read, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-sonnet-4
@@ -22,7 +26,11 @@ agents:
     role: executive
     department: executive
     system_prompt_path: aeco/agents/prompts/ceo_director.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 5
+      timeout_seconds: 300
+      allowed_tools: [Read, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-sonnet-4
@@ -32,7 +40,7 @@ agents:
     permissions: [metrics:read, agent_logs:read, budget:read, clickup:read]
 
   # ═══════════════════════════════════════════════════════════════
-  # PRODUCT — langchain executor (planning/analysis, no file ops)
+  # PRODUCT — claude_code (FREE on Max plan)
   # ═══════════════════════════════════════════════════════════════
 
   - agent_id: pm_agent
@@ -40,7 +48,11 @@ agents:
     role: product_manager
     department: product
     system_prompt_path: aeco/agents/prompts/pm_agent.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 10
+      timeout_seconds: 300
+      allowed_tools: [Read, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-sonnet-4
@@ -54,7 +66,11 @@ agents:
     role: planner
     department: product
     system_prompt_path: aeco/agents/prompts/task_planner.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 5
+      timeout_seconds: 300
+      allowed_tools: [Read, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-sonnet-4
@@ -68,7 +84,11 @@ agents:
     role: planner
     department: product
     system_prompt_path: aeco/agents/prompts/program_manager.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 4
+      timeout_seconds: 300
+      allowed_tools: [Read, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -96,8 +116,8 @@ agents:
       model: anthropic/claude-sonnet-4
       temperature: 0.5
       max_tokens: 4096
-    tools: [clickup_read_task, clickup_create_comment, file_write, file_read]
-    permissions: [clickup:read, clickup:comment, workspace:write, workspace:read]
+    tools: [clickup_read_task, clickup_create_comment, file_write, file_read, git_commit, git_branch, scaffold_list_templates, scaffold_project]
+    permissions: [clickup:read, clickup:comment, workspace:write, workspace:read, git:write, scaffold:read, scaffold:write]
 
   - agent_id: backend_engineer
     name: Backend Engineer
@@ -114,8 +134,8 @@ agents:
       model: anthropic/claude-sonnet-4
       temperature: 0.4
       max_tokens: 4096
-    tools: [clickup_read_task, clickup_create_comment, file_write, file_read]
-    permissions: [clickup:read, clickup:comment, workspace:write, workspace:read]
+    tools: [clickup_read_task, clickup_create_comment, file_write, file_read, git_commit, package_install]
+    permissions: [clickup:read, clickup:comment, workspace:write, workspace:read, git:write, devops:execute]
 
   - agent_id: frontend_engineer
     name: Frontend Engineer
@@ -132,8 +152,8 @@ agents:
       model: anthropic/claude-sonnet-4
       temperature: 0.4
       max_tokens: 4096
-    tools: [clickup_read_task, clickup_create_comment, file_write, file_read]
-    permissions: [clickup:read, clickup:comment, workspace:write, workspace:read]
+    tools: [clickup_read_task, clickup_create_comment, file_write, file_read, git_commit, package_install, pattern_list, pattern_use, browser_screenshot, browser_click, browser_fill, browser_get_text, browser_console_errors, browser_close, dev_server_start, dev_server_stop]
+    permissions: [clickup:read, clickup:comment, workspace:write, workspace:read, git:write, devops:execute, pattern:read, pattern:write, browser:read, browser:write]
 
   - agent_id: database_engineer
     name: Database Engineer
@@ -179,7 +199,7 @@ agents:
     executor: claude_code
     claude_code_config:
       max_turns: 15
-      timeout_seconds: 600
+      timeout_seconds: 3000
       allowed_tools: [Read, Write, Edit, Bash, Glob, Grep]
     llm_config:
       provider: openrouter
@@ -204,8 +224,8 @@ agents:
       model: anthropic/claude-sonnet-4
       temperature: 0.4
       max_tokens: 4096
-    tools: [file_write, file_read, code_execute]
-    permissions: [workspace:write, workspace:read, code:execute]
+    tools: [file_write, file_read, code_execute, git_commit, git_branch, package_install, scaffold_project, scaffold_list_templates, pattern_list, pattern_use, auth_setup_supabase, auth_add_provider, auth_generate_middleware, email_send, email_send_template, browser_screenshot, browser_click, browser_fill, browser_get_text, browser_console_errors, browser_close, dev_server_start, dev_server_stop]
+    permissions: [workspace:write, workspace:read, code:execute, git:write, devops:execute, scaffold:write, scaffold:read, pattern:read, pattern:write, auth:write, email:send, browser:read, browser:write]
 
   - agent_id: qa_engineer
     name: QA Engineer
@@ -222,8 +242,26 @@ agents:
       model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 4096
-    tools: [clickup_read_task, clickup_create_comment, file_read, file_write, code_execute]
-    permissions: [clickup:read, clickup:comment, workspace:read, workspace:write, code:execute]
+    tools: [clickup_read_task, clickup_create_comment, file_read, file_write, code_execute, smoke_test_url, smoke_test_api, browser_screenshot, browser_click, browser_fill, browser_get_text, browser_console_errors, browser_close]
+    permissions: [clickup:read, clickup:comment, workspace:read, workspace:write, code:execute, smoke:read, browser:read, browser:write]
+
+  - agent_id: acceptance_tester
+    name: Acceptance Tester
+    role: qa
+    department: engineering
+    system_prompt_path: aeco/agents/prompts/acceptance_tester.md
+    executor: claude_code
+    claude_code_config:
+      max_turns: 15
+      timeout_seconds: 300
+      allowed_tools: [Read, Bash, Glob, Grep]
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.2
+      max_tokens: 4096
+    tools: [file_read, dev_server_start, dev_server_stop, package_install, smoke_test_url, smoke_test_api, browser_screenshot, browser_click, browser_fill, browser_get_text, browser_console_errors, browser_close]
+    permissions: [workspace:read, code:execute, devops:execute, smoke:read, browser:read, browser:write]
 
   - agent_id: devops_engineer
     name: DevOps Engineer
@@ -233,18 +271,18 @@ agents:
     executor: claude_code
     claude_code_config:
       max_turns: 15
-      timeout_seconds: 600
+      timeout_seconds: 3000
       allowed_tools: [Read, Write, Edit, Bash, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
       temperature: 0.3
       max_tokens: 4096
-    tools: [clickup_read_task, clickup_create_comment, file_write, file_read, code_execute]
-    permissions: [clickup:read, clickup:comment, workspace:write, workspace:read, code:execute]
+    tools: [clickup_read_task, clickup_create_comment, file_write, file_read, code_execute, git_commit, git_branch, git_push, deploy_preview, deploy_production, deploy_rollback, package_install, dev_server_start, dev_server_stop, smoke_test_url, smoke_test_api, cicd_generate, email_send, email_send_template]
+    permissions: [clickup:read, clickup:comment, workspace:write, workspace:read, code:execute, git:write, git:push, deploy:write, devops:execute, smoke:read, cicd:write, email:send]
 
   # ═══════════════════════════════════════════════════════════════
-  # OPERATIONS / EVALUATION — langchain executor (analysis, no file ops)
+  # OPERATIONS / EVALUATION — claude_code (FREE on Max plan)
   # ═══════════════════════════════════════════════════════════════
 
   - agent_id: coo_orchestrator
@@ -252,7 +290,11 @@ agents:
     role: orchestrator
     department: operations
     system_prompt_path: aeco/agents/prompts/coo_orchestrator.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 4
+      timeout_seconds: 300
+      allowed_tools: [Read, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -266,7 +308,11 @@ agents:
     role: finance
     department: operations
     system_prompt_path: aeco/agents/prompts/budget_controller.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 3
+      timeout_seconds: 300
+      allowed_tools: [Read]
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -280,7 +326,11 @@ agents:
     role: analytics
     department: operations
     system_prompt_path: aeco/agents/prompts/analytics_agent.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 5
+      timeout_seconds: 300
+      allowed_tools: [Read, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -294,21 +344,29 @@ agents:
     role: evaluator
     department: operations
     system_prompt_path: aeco/agents/prompts/agent_evaluator.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 4
+      timeout_seconds: 300
+      allowed_tools: [Read, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
       temperature: 0.3
       max_tokens: 2048
-    tools: [agent_logs_read, metrics_read, clickup_read_task, clickup_create_comment]
-    permissions: [agent_logs:read, metrics:read, clickup:read, clickup:comment]
+    tools: [agent_logs_read, metrics_read, telemetry_query, clickup_read_task, clickup_create_comment]
+    permissions: [agent_logs:read, metrics:read, telemetry:read, clickup:read, clickup:comment]
 
   - agent_id: security_reviewer
     name: Security Reviewer
     role: security
     department: operations
     system_prompt_path: aeco/agents/prompts/security_reviewer.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 5
+      timeout_seconds: 180
+      allowed_tools: [Read, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -322,35 +380,79 @@ agents:
     role: postmortem
     department: operations
     system_prompt_path: aeco/agents/prompts/postmortem_writer.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 8
+      timeout_seconds: 300
+      allowed_tools: [Read, Write, Edit, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
       temperature: 0.4
-      max_tokens: 2048
-    tools: [agent_logs_read, metrics_read, clickup_read_task, clickup_create_comment]
-    permissions: [agent_logs:read, metrics:read, clickup:read, clickup:comment]
+      max_tokens: 4096
+    tools:
+      - agent_logs_read
+      - metrics_read
+      - clickup_read_task
+      - clickup_create_comment
+      - file_read
+      - file_write
+      - git_workspace_snapshot
+      - capture_page_screenshot
+    permissions:
+      - agent_logs:read
+      - metrics:read
+      - clickup:read
+      - clickup:comment
+      - workspace:read
+      - workspace:write
+
+  - agent_id: prompt_optimizer
+    name: Prompt Optimizer
+    role: optimizer
+    department: operations
+    system_prompt_path: aeco/agents/prompts/prompt_optimizer.md
+    executor: claude_code
+    claude_code_config:
+      max_turns: 5
+      timeout_seconds: 180
+      allowed_tools: [Read, Glob, Grep]
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.3
+      max_tokens: 4096
+    tools: [agent_logs_read, metrics_read, file_read, telemetry_query]
+    permissions: [agent_logs:read, metrics:read, workspace:read, telemetry:read]
 
   - agent_id: release_manager
     name: Release Manager
     role: release
     department: engineering
     system_prompt_path: aeco/agents/prompts/release_manager.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 10
+      timeout_seconds: 300
+      allowed_tools: [Read, Write, Edit, Glob, Grep, Bash]
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
       temperature: 0.3
       max_tokens: 2048
-    tools: [file_read, code_execute, clickup_read_task, clickup_create_comment]
-    permissions: [workspace:read, code:execute, clickup:read, clickup:comment]
+    tools: [file_read, code_execute, clickup_read_task, clickup_create_comment, git_push, git_merge, deploy_preview, deploy_production, deploy_rollback]
+    permissions: [workspace:read, code:execute, clickup:read, clickup:comment, git:push, git:write, deploy:write]
 
   - agent_id: incident_investigator
     name: Incident Investigator
     role: investigator
     department: operations
     system_prompt_path: aeco/agents/prompts/incident_investigator.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 5
+      timeout_seconds: 300
+      allowed_tools: [Read, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -364,7 +466,11 @@ agents:
     role: experimentation
     department: product
     system_prompt_path: aeco/agents/prompts/experiment_agent.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 4
+      timeout_seconds: 300
+      allowed_tools: [Read, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -374,7 +480,7 @@ agents:
     permissions: [metrics:read, agent_logs:read, clickup:read, clickup:comment]
 
   # ═══════════════════════════════════════════════════════════════
-  # MARKETING & GROWTH — langchain executor (strategy/API calls)
+  # MARKETING & GROWTH — claude_code (FREE on Max plan)
   # ═══════════════════════════════════════════════════════════════
 
   - agent_id: growth_marketing
@@ -382,13 +488,17 @@ agents:
     role: marketing
     department: marketing
     system_prompt_path: aeco/agents/prompts/growth_marketing.md
-    executor: langchain
+    executor: claude_code
+    claude_code_config:
+      max_turns: 5
+      timeout_seconds: 300
+      allowed_tools: [Read, Glob, Grep]
     llm_config:
       provider: openrouter
       model: anthropic/claude-sonnet-4
       temperature: 0.4
       max_tokens: 4096
-    tools: [facebook_get_campaigns, facebook_get_insights, facebook_update_campaign, facebook_create_campaign, metrics_read]
+    tools: [facebook_get_campaigns, facebook_get_adsets, facebook_get_ads, facebook_get_insights, facebook_get_account_overview, facebook_diagnose_cpm, facebook_diagnose_zero_conversions, facebook_update_campaign, facebook_update_adset, facebook_create_campaign, facebook_create_adset, metrics_read]
     permissions: [facebook:read, facebook:write, metrics:read]
 
   - agent_id: content_creator
@@ -396,7 +506,7 @@ agents:
     role: content
     department: marketing
     system_prompt_path: aeco/agents/prompts/content_creator.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -410,7 +520,7 @@ agents:
     role: customer_success
     department: revenue
     system_prompt_path: aeco/agents/prompts/customer_success.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -424,14 +534,14 @@ agents:
     role: finance
     department: revenue
     system_prompt_path: aeco/agents/prompts/revenue_analyst.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 2048
-    tools: [stripe_get_mrr, stripe_get_revenue, stripe_get_churn, stripe_get_customers, budget_read, metrics_read]
-    permissions: [stripe:read, budget:read, metrics:read]
+    tools: [stripe_get_mrr, stripe_get_revenue, stripe_get_churn, stripe_get_customers, budget_read, metrics_read, telemetry_query]
+    permissions: [stripe:read, budget:read, metrics:read, telemetry:read]
 
   # ═══════════════════════════════════════════════════════════════
   # TEAM LEADS — langchain executor (lightweight routing decisions)
@@ -444,7 +554,7 @@ agents:
     is_lead: true
     team_members: [backend_engineer, frontend_engineer, devops_engineer, database_engineer, api_engineer, infra_engineer, fullstack_engineer]
     system_prompt_path: aeco/agents/prompts/engineering_lead.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -460,7 +570,7 @@ agents:
     is_lead: true
     team_members: [growth_marketing, content_creator, facebook_ads_specialist, email_marketer, seo_specialist, landing_page_designer]
     system_prompt_path: aeco/agents/prompts/marketing_lead.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -476,7 +586,7 @@ agents:
     is_lead: true
     team_members: [pm_agent, task_planner, ux_researcher, data_analyst, product_designer]
     system_prompt_path: aeco/agents/prompts/product_lead.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -492,7 +602,7 @@ agents:
     is_lead: true
     team_members: [customer_success, revenue_analyst, pricing_analyst, retention_specialist, onboarding_specialist]
     system_prompt_path: aeco/agents/prompts/revenue_lead.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -508,7 +618,7 @@ agents:
     is_lead: true
     team_members: [coo_orchestrator, budget_controller, security_reviewer, compliance_reviewer, cost_optimizer]
     system_prompt_path: aeco/agents/prompts/operations_lead.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -526,13 +636,30 @@ agents:
     role: marketing
     department: marketing
     system_prompt_path: aeco/agents/prompts/facebook_ads_specialist.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-sonnet-4
       temperature: 0.4
       max_tokens: 4096
-    tools: [facebook_get_campaigns, facebook_get_insights, facebook_update_campaign, facebook_create_campaign, metrics_read]
+    tools: [facebook_get_campaigns, facebook_get_adsets, facebook_get_ads, facebook_get_insights, facebook_get_account_overview, facebook_diagnose_cpm, facebook_diagnose_zero_conversions, facebook_update_campaign, facebook_update_adset, facebook_create_campaign, facebook_create_adset, metrics_read]
+    permissions: [facebook:read, facebook:write, metrics:read]
+
+  - agent_id: campaign_manager
+    name: Campaign Manager
+    role: marketing
+    department: marketing
+    system_prompt_path: aeco/agents/prompts/campaign_manager.md
+    executor: claude_code
+    claude_code_config:
+      max_turns: 15
+      timeout_seconds: 600
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.3
+      max_tokens: 4096
+    tools: [facebook_get_campaigns, facebook_get_adsets, facebook_get_ads, facebook_get_insights, facebook_get_account_overview, facebook_diagnose_cpm, facebook_diagnose_zero_conversions, facebook_update_campaign, facebook_update_adset, facebook_create_campaign, facebook_create_adset, facebook_creative_report, facebook_generate_ad_copy, metrics_read]
     permissions: [facebook:read, facebook:write, metrics:read]
 
   - agent_id: email_marketer
@@ -540,7 +667,7 @@ agents:
     role: marketing
     department: marketing
     system_prompt_path: aeco/agents/prompts/email_marketer.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -554,7 +681,7 @@ agents:
     role: marketing
     department: marketing
     system_prompt_path: aeco/agents/prompts/seo_specialist.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -590,7 +717,7 @@ agents:
     role: product
     department: product
     system_prompt_path: aeco/agents/prompts/ux_researcher.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -604,14 +731,14 @@ agents:
     role: product
     department: product
     system_prompt_path: aeco/agents/prompts/data_analyst.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
       temperature: 0.2
       max_tokens: 2048
-    tools: [metrics_read, stripe_get_mrr, stripe_get_revenue, stripe_get_churn, stripe_get_customers]
-    permissions: [metrics:read, stripe:read]
+    tools: [metrics_read, telemetry_query, stripe_get_mrr, stripe_get_revenue, stripe_get_churn, stripe_get_customers]
+    permissions: [metrics:read, telemetry:read, stripe:read]
 
   - agent_id: product_designer
     name: Product Designer
@@ -640,7 +767,7 @@ agents:
     role: finance
     department: revenue
     system_prompt_path: aeco/agents/prompts/pricing_analyst.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -654,7 +781,7 @@ agents:
     role: customer_success
     department: revenue
     system_prompt_path: aeco/agents/prompts/retention_specialist.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -668,7 +795,7 @@ agents:
     role: customer_success
     department: revenue
     system_prompt_path: aeco/agents/prompts/onboarding_specialist.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -686,7 +813,7 @@ agents:
     role: compliance
     department: operations
     system_prompt_path: aeco/agents/prompts/compliance_reviewer.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku
@@ -700,7 +827,7 @@ agents:
     role: finance
     department: operations
     system_prompt_path: aeco/agents/prompts/cost_optimizer.md
-    executor: langchain
+    executor: claude_code
     llm_config:
       provider: openrouter
       model: anthropic/claude-3.5-haiku

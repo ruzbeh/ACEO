@@ -1,5 +1,11 @@
 """AECO FastAPI application entry point."""
 
+# Register PEP 604 / built-in generic typing shims before FastAPI/Pydantic import (Python <3.10).
+try:
+    import eval_type_backport  # noqa: F401
+except ImportError:
+    pass
+
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -14,7 +20,7 @@ from aeco.agents.registry import registry
 from aeco.api.routes_agents import router as agents_router
 from aeco.api.routes_budget import router as budget_router
 from aeco.api.routes_initiatives import router as initiatives_router
-from aeco.api.routes_initiatives import set_initiative_graph
+from aeco.api.routes_initiatives import set_initiative_cost_tracker, set_initiative_graph
 from aeco.tools.gateway import tool_gateway
 from aeco.tools.registry import register_all_tools
 from aeco.api.routes_projects import router as projects_router
@@ -181,6 +187,8 @@ async def lifespan(app: FastAPI):
         budget_engine=budget_engine,
     )
     set_initiative_graph(initiative_graph)
+    if hasattr(initiative_graph, "_initiative_nodes"):
+        set_initiative_cost_tracker(initiative_graph._initiative_nodes.cost_tracker)
     logger.info("Initiative workflow graph compiled")
 
     # Build and register the portfolio-level workflow graph
@@ -198,8 +206,84 @@ async def lifespan(app: FastAPI):
     set_portfolio_graph(portfolio_graph)
     logger.info("Portfolio workflow graph compiled")
 
+    # Build and register the fast-track workflow graph (3-node: architect -> build -> ship)
+    from aeco.orchestrator.fast_track_graph import build_fast_track_graph
+    from aeco.api.routes_fast_track import set_fast_track_graph
+
+    fast_track_graph = build_fast_track_graph(
+        registry=registry,
+        audit_logger=audit_logger,
+        context_builder=context_builder,
+        decision_ledger=decision_ledger,
+        budget_engine=budget_engine,
+    )
+    set_fast_track_graph(fast_track_graph)
+    logger.info("Fast-track workflow graph compiled")
+
+    # Visual feedback dependencies
+    from aeco.api.routes_visual_feedback import set_dependencies as set_vf_deps
+    set_vf_deps(registry, audit_logger)
+
+    # Initialize scheduler and metric triggers
+    from aeco.scheduler.engine import SchedulerEngine
+    from aeco.scheduler.triggers import TriggerEngine
+    from aeco.api.routes_scheduler import set_engines
+
+    scheduler = SchedulerEngine()
+    trigger_engine = TriggerEngine()
+    set_engines(scheduler, trigger_engine)
+
+    # Campaign manager dependencies
+    from aeco.api.routes_campaigns import set_campaign_deps
+    set_campaign_deps(registry, audit_logger, scheduler)
+
+    # Register metric fetchers for triggers
+    async def _stripe_fetcher(metric_name: str):
+        from aeco.tools.stripe_tools import stripe_get_mrr, stripe_get_churn
+        if metric_name == "churn_rate":
+            data = await stripe_get_churn()
+            return data.get("churn_rate", 0)
+        elif metric_name in ("mrr", "mrr_change_pct"):
+            data = await stripe_get_mrr()
+            return data.get("mrr", 0)
+        return None
+
+    async def _facebook_fetcher(metric_name: str):
+        from aeco.tools.facebook_tools import facebook_get_insights
+        data = await facebook_get_insights()
+        if metric_name == "spend_efficiency" and data.get("spend", 0) > 0:
+            return data.get("revenue", 0) / data.get("spend", 1)
+        return None
+
+    async def _agent_metrics_fetcher(metric_name: str):
+        from aeco.tools.metrics_tools import metrics_read
+        data = await metrics_read(metric_type="agent_performance")
+        agents = data.get("agents", {})
+        if metric_name == "max_error_rate" and agents:
+            return max(a.get("error_rate", 0) for a in agents.values())
+        return None
+
+    trigger_engine.register_fetcher("stripe", _stripe_fetcher)
+    trigger_engine.register_fetcher("facebook", _facebook_fetcher)
+    trigger_engine.register_fetcher("agent_metrics", _agent_metrics_fetcher)
+
+    # Load active prompt patches
+    try:
+        from aeco.api.routes_prompt_patches import _reload_active_patches
+        async with async_session_factory() as session:
+            await _reload_active_patches(session)
+        logger.info("Active prompt patches loaded")
+    except Exception as e:
+        logger.debug(f"Prompt patch loading skipped: {e}")
+
+    # Start scheduler (runs in background)
+    await scheduler.start()
+    logger.info("Scheduler started")
+
     yield
 
+    # Shutdown
+    await scheduler.stop()
     logger.info("AECO shutting down")
 
 
@@ -231,6 +315,30 @@ app.include_router(initiatives_router)
 # Portfolio orchestration
 from aeco.api.routes_portfolio import router as portfolio_router
 app.include_router(portfolio_router)
+
+# Scheduler, telemetry, prompt patches
+from aeco.api.routes_scheduler import router as scheduler_router
+from aeco.api.routes_telemetry import router as telemetry_router
+from aeco.api.routes_prompt_patches import router as prompt_patches_router
+app.include_router(scheduler_router)
+app.include_router(telemetry_router)
+app.include_router(prompt_patches_router)
+
+# Fast-track (3-step: architect -> build -> ship)
+from aeco.api.routes_fast_track import router as fast_track_router
+app.include_router(fast_track_router)
+
+# Campaign manager (monitor, optimize, generate creatives)
+from aeco.api.routes_campaigns import router as campaigns_router
+app.include_router(campaigns_router)
+
+# Products (per-product config, funnel, metrics)
+from aeco.api.routes_products import router as products_router
+app.include_router(products_router)
+
+# Visual feedback (upload screenshot + describe changes)
+from aeco.api.routes_visual_feedback import router as visual_feedback_router
+app.include_router(visual_feedback_router)
 
 # WebSocket for real-time events
 from aeco.api.routes_ws import router as ws_router
