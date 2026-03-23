@@ -9,6 +9,7 @@ import type {
   DecisionsResponse,
   InitiativeSpend,
   InitiativeLiveLogResponse,
+  InitiativeLiveStatus,
 } from './types';
 
 export function useInitiatives() {
@@ -92,6 +93,32 @@ export function useInitiativeLiveLog(initiativeId: string | undefined, status: s
     enabled: !!initiativeId,
     refetchInterval: (query) => {
       if (query.state.status === 'error' || !inFlight) return false;
+      return 3_000;
+    },
+  });
+}
+
+/** Real-time structured status: phase progress, active tasks, elapsed time. Polls every 3s while in-flight. */
+export function useInitiativeLiveStatus(initiativeId: string | undefined, status: string | undefined) {
+  const qc = useQueryClient();
+  const inFlight = status && status !== 'draft' && status !== 'closed';
+
+  useEffect(() => {
+    if (!initiativeId) return undefined;
+    return aecoWs.on('initiative.*', (event) => {
+      if (event.data.initiative_id === initiativeId) {
+        qc.invalidateQueries({ queryKey: ['initiatives', initiativeId, 'live'] });
+      }
+    });
+  }, [initiativeId, qc]);
+
+  return useQuery({
+    queryKey: ['initiatives', initiativeId, 'live'],
+    queryFn: () => api.get<InitiativeLiveStatus>(`/initiatives/${initiativeId}/live`),
+    enabled: !!initiativeId,
+    refetchInterval: (query) => {
+      if (query.state.status === 'error') return false;
+      if (!inFlight) return false;
       return 3_000;
     },
   });

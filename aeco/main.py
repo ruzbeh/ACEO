@@ -20,7 +20,7 @@ from aeco.agents.registry import registry
 from aeco.api.routes_agents import router as agents_router
 from aeco.api.routes_budget import router as budget_router
 from aeco.api.routes_initiatives import router as initiatives_router
-from aeco.api.routes_initiatives import set_initiative_graph
+from aeco.api.routes_initiatives import set_initiative_cost_tracker, set_initiative_graph
 from aeco.tools.gateway import tool_gateway
 from aeco.tools.registry import register_all_tools
 from aeco.api.routes_projects import router as projects_router
@@ -187,6 +187,8 @@ async def lifespan(app: FastAPI):
         budget_engine=budget_engine,
     )
     set_initiative_graph(initiative_graph)
+    if hasattr(initiative_graph, "_initiative_nodes"):
+        set_initiative_cost_tracker(initiative_graph._initiative_nodes.cost_tracker)
     logger.info("Initiative workflow graph compiled")
 
     # Build and register the portfolio-level workflow graph
@@ -218,6 +220,10 @@ async def lifespan(app: FastAPI):
     set_fast_track_graph(fast_track_graph)
     logger.info("Fast-track workflow graph compiled")
 
+    # Visual feedback dependencies
+    from aeco.api.routes_visual_feedback import set_dependencies as set_vf_deps
+    set_vf_deps(registry, audit_logger)
+
     # Initialize scheduler and metric triggers
     from aeco.scheduler.engine import SchedulerEngine
     from aeco.scheduler.triggers import TriggerEngine
@@ -226,6 +232,10 @@ async def lifespan(app: FastAPI):
     scheduler = SchedulerEngine()
     trigger_engine = TriggerEngine()
     set_engines(scheduler, trigger_engine)
+
+    # Campaign manager dependencies
+    from aeco.api.routes_campaigns import set_campaign_deps
+    set_campaign_deps(registry, audit_logger, scheduler)
 
     # Register metric fetchers for triggers
     async def _stripe_fetcher(metric_name: str):
@@ -318,9 +328,16 @@ app.include_router(prompt_patches_router)
 from aeco.api.routes_fast_track import router as fast_track_router
 app.include_router(fast_track_router)
 
+# Campaign manager (monitor, optimize, generate creatives)
+from aeco.api.routes_campaigns import router as campaigns_router
+app.include_router(campaigns_router)
+
+# Products (per-product config, funnel, metrics)
+from aeco.api.routes_products import router as products_router
+app.include_router(products_router)
+
 # Visual feedback (upload screenshot + describe changes)
-from aeco.api.routes_visual_feedback import router as visual_feedback_router, set_dependencies as set_vf_deps
-set_vf_deps(registry, audit_logger)
+from aeco.api.routes_visual_feedback import router as visual_feedback_router
 app.include_router(visual_feedback_router)
 
 # WebSocket for real-time events

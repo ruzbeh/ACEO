@@ -13,6 +13,7 @@ import type { ScreenshotUploadData } from '../components/ui/ScreenshotUpload';
 import { VerdictBadge } from '../features/initiatives/VerdictBadge';
 import { DecisionTimeline } from '../features/initiatives/DecisionTimeline';
 import { WhatsHappening } from '../features/initiatives/WhatsHappening';
+import { LiveStatusBar } from '../features/initiatives/LiveStatusBar';
 import { InitiativeLiveTrace } from '../features/initiatives/InitiativeLiveTrace';
 import { INITIATIVE_STATUSES, INITIATIVE_STATUS_COLORS } from '../lib/constants';
 import { formatDate, formatExactDateTime } from '../lib/utils';
@@ -112,6 +113,14 @@ export function InitiativeDetailPage() {
         </div>
       </div>
 
+      {/* Live Status Bar — prominent when initiative is running */}
+      {initiative.status !== 'draft' && (
+        <LiveStatusBar
+          initiativeId={initiative.id}
+          status={initiative.status}
+        />
+      )}
+
       {/* Pipeline */}
       <Card>
         <h3 className="mb-4 text-sm font-medium text-gray-300">Lifecycle</h3>
@@ -128,7 +137,7 @@ export function InitiativeDetailPage() {
       </Card>
 
       {/* What's happening (when in progress) */}
-      <WhatsHappening status={initiative.status} />
+      <WhatsHappening status={initiative.status} initiativeId={initiative.id} />
 
       <InitiativeLiveTrace
         initiativeId={initiative.id}

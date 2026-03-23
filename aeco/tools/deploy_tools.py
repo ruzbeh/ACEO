@@ -19,7 +19,16 @@ def _workspace_root(ws: str | None) -> Path:
 
 
 def _find_cli(name: str) -> str | None:
-    return shutil.which(name)
+    """Find a CLI tool, checking common paths if not in PATH."""
+    found = shutil.which(name)
+    if found:
+        return found
+    # Common install locations on macOS
+    for prefix in ["/opt/homebrew/bin", "/usr/local/bin", str(Path.home() / ".npm-global/bin")]:
+        candidate = Path(prefix) / name
+        if candidate.exists():
+            return str(candidate)
+    return None
 
 
 async def deploy_preview(

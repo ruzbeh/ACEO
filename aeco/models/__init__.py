@@ -1,5 +1,6 @@
 from aeco.models.agent import AgentDefinition, LLMConfig
 from aeco.models.agent_output import AgentOutput
+from aeco.models.campaign_product import CampaignProduct
 from aeco.models.audit import AuditLogEntry
 from aeco.models.budget import (
     ApprovalStatus,
@@ -23,6 +24,7 @@ __all__ = [
     "ApprovalStatus",
     "AuditLogEntry",
     "BudgetAlert",
+    "CampaignProduct",
     "BudgetPeriod",
     "DecisionCategory",
     "DecisionRecord",

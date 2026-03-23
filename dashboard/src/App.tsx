@@ -8,6 +8,7 @@ import { BudgetPage } from './pages/BudgetPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { CompanyPage } from './pages/CompanyPage';
 import { PortfolioPage } from './pages/PortfolioPage';
+import { CampaignsPage } from './pages/CampaignsPage';
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="tasks" element={<TasksPage />} />
         <Route path="tasks/:id" element={<TaskDetailPage />} />
         <Route path="budget" element={<BudgetPage />} />
+        <Route path="campaigns" element={<CampaignsPage />} />
         <Route path="agents" element={<AgentsPage />} />
       </Route>
     </Routes>

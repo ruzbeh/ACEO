@@ -81,6 +81,27 @@ export interface RunInitiativeRequest {
   workspace_path?: string;
 }
 
+// ── Initiative Live Status ──
+export interface InitiativeLiveTaskStatus {
+  title: string;
+  agent_id: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+}
+
+export interface InitiativeLiveStatus {
+  initiative_id: string;
+  current_phase: string;
+  complexity: 'trivial' | 'small' | 'standard';
+  progress: {
+    phases_completed: string[];
+    current_node: string;
+    phases_remaining: string[];
+  };
+  tasks: InitiativeLiveTaskStatus[];
+  elapsed_seconds: number;
+  verdict: string | null;
+}
+
 /** Company-style JSON log lines (cat/event + payload) for initiative live trace */
 export interface InitiativeLiveLogResponse {
   initiative_id: string;

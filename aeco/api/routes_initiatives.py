@@ -49,11 +49,17 @@ def append_initiative_live_log(initiative_id: str, record: dict[str, Any]) -> No
 
 # Set by main.py after the initiative graph is built
 _compiled_initiative_graph = None
+_initiative_cost_tracker = None
 
 
 def set_initiative_graph(graph):
     global _compiled_initiative_graph
     _compiled_initiative_graph = graph
+
+
+def set_initiative_cost_tracker(tracker):
+    global _initiative_cost_tracker
+    _initiative_cost_tracker = tracker
 
 
 # --- Request/Response models ---
@@ -113,7 +119,25 @@ def _resolve_workspace_path(path: str) -> str:
 async def create_initiative(
     req: CreateInitiativeRequest, session: AsyncSession = Depends(get_session)
 ):
-    """Create a new initiative."""
+    """Create a new initiative. Rejects near-duplicates of active initiatives."""
+    # Dedup check: block if an active initiative has the same title
+    from sqlalchemy import and_, or_
+    active_statuses = [InitiativeStatus.draft, InitiativeStatus.planning, InitiativeStatus.executing]
+    dup_query = select(Initiative).where(
+        and_(
+            Initiative.title == req.title,
+            Initiative.status.in_(active_statuses),
+        )
+    )
+    dup_result = await session.execute(dup_query)
+    existing = dup_result.scalars().first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Active initiative with same title already exists: {existing.id}. "
+            f"Status: {existing.status.value}. Kill or wait for it to finish before creating a duplicate.",
+        )
+
     initiative = Initiative(
         title=req.title,
         goal=req.goal,
@@ -209,6 +233,148 @@ async def get_initiative_decisions(initiative_id: str):
     return {"initiative_id": initiative_id, "decisions": decisions}
 
 
+@router.get("/{initiative_id}/live")
+async def get_initiative_live_status(
+    initiative_id: str, session: AsyncSession = Depends(get_session)
+):
+    """Return real-time structured status for the initiative workflow.
+
+    Reconstructs phase progress, active tasks, and elapsed time from the
+    in-memory live log buffer and the DB initiative record.
+    """
+    initiative = await session.get(Initiative, uuid.UUID(initiative_id))
+    if not initiative:
+        raise HTTPException(status_code=404, detail="Initiative not found")
+
+    run = _initiative_runs.get(initiative_id)
+    lines = list(run["live_log"]) if run and run.get("live_log") else []
+
+    # --- Determine complexity from log lines ---
+    complexity = "standard"
+    for line in lines:
+        if line.get("event") == "initiative_node" and line.get("node") == "intake":
+            summary = str(line.get("summary", ""))
+            if "trivial" in summary.lower():
+                complexity = "trivial"
+            elif "small" in summary.lower():
+                complexity = "small"
+            break
+
+    # Standard phases (full flow)
+    ALL_PHASES = [
+        "intake", "pm_spec", "architect", "security_review",
+        "task_planning", "execute_tasks", "evaluate", "acceptance_test", "close",
+    ]
+    # Trivial/small skip pm/architect/security
+    TRIVIAL_PHASES = [
+        "intake", "task_planning", "execute_tasks", "evaluate", "close",
+    ]
+    phases = TRIVIAL_PHASES if complexity in ("trivial", "small") else ALL_PHASES
+
+    # --- Walk log lines to find completed nodes and current node ---
+    entered_nodes: list[str] = []
+    exited_nodes: set[str] = set()
+    for line in lines:
+        ev = line.get("event", "")
+        node = line.get("node")
+        if ev == "initiative_node" and node:
+            if node not in entered_nodes:
+                entered_nodes.append(node)
+        # Also check node_enter / node_exit from task-level
+        if ev == "initiative_node" and node and node not in exited_nodes:
+            # Mark as "entered" — the next node entry means this one completed
+            pass
+
+    # Derive phases_completed from the current_phase on the initiative
+    current_phase = initiative.status
+    # Map DB status to graph node name
+    STATUS_TO_NODE = {
+        "planning": "pm_spec",
+        "executing": "execute_tasks",
+        "in_review": "evaluate",
+        "measuring": "evaluate",
+        "closed": "close",
+    }
+    current_node = STATUS_TO_NODE.get(current_phase, current_phase)
+    # If we have log data, use the last entered node
+    if entered_nodes:
+        current_node = entered_nodes[-1]
+
+    # Build phases_completed / phases_remaining
+    if current_node in phases:
+        idx = phases.index(current_node)
+        phases_completed = phases[:idx]
+        phases_remaining = phases[idx + 1:]
+    else:
+        phases_completed = []
+        phases_remaining = phases[1:]
+
+    # --- Extract task info from execution log lines ---
+    tasks: list[dict[str, Any]] = []
+    seen_tasks: set[str] = set()
+    for line in lines:
+        ev = line.get("event", "")
+        if ev in ("agent_start", "agent_end") and line.get("task_id"):
+            task_title = line.get("task_title", line.get("task_id", ""))
+            agent_id = line.get("agent_id", "unknown")
+            task_key = f"{task_title}:{agent_id}"
+            if task_key not in seen_tasks:
+                seen_tasks.add(task_key)
+                tasks.append({
+                    "title": task_title,
+                    "agent_id": agent_id,
+                    "status": "in_progress",
+                })
+            if ev == "agent_end":
+                # Update last matching task to completed/failed
+                for t in reversed(tasks):
+                    if t["title"] == task_title and t["agent_id"] == agent_id:
+                        t["status"] = "completed" if line.get("success", True) else "failed"
+                        break
+
+    # Also include task_graph from the state if we see node entries for execute
+    for line in lines:
+        if line.get("event") == "initiative_node" and line.get("node") == "execute_tasks":
+            break
+
+    # --- Elapsed seconds ---
+    elapsed_seconds = 0
+    started_at = (run or {}).get("started_at")
+    if not started_at and initiative.run_started_at:
+        started_at = initiative.run_started_at.isoformat()
+    if started_at:
+        try:
+            start_dt = datetime.fromisoformat(started_at)
+            elapsed_seconds = int((datetime.now(timezone.utc) - start_dt).total_seconds())
+        except (ValueError, TypeError):
+            pass
+
+    # If initiative is closed, freeze elapsed at the last log timestamp
+    if initiative.status == "closed" and lines:
+        last_ts = lines[-1].get("ts")
+        if last_ts and started_at:
+            try:
+                start_dt = datetime.fromisoformat(started_at)
+                end_dt = datetime.fromisoformat(last_ts)
+                elapsed_seconds = int((end_dt - start_dt).total_seconds())
+            except (ValueError, TypeError):
+                pass
+
+    return {
+        "initiative_id": initiative_id,
+        "current_phase": current_node,
+        "complexity": complexity,
+        "progress": {
+            "phases_completed": phases_completed,
+            "current_node": current_node,
+            "phases_remaining": phases_remaining,
+        },
+        "tasks": tasks,
+        "elapsed_seconds": max(0, elapsed_seconds),
+        "verdict": initiative.verdict if initiative.verdict != "pending" else None,
+    }
+
+
 @router.get("/{initiative_id}/live-log")
 async def get_initiative_live_log(
     initiative_id: str, session: AsyncSession = Depends(get_session)
@@ -235,6 +401,17 @@ async def get_initiative_spend(initiative_id: str, budget_id: Optional[str] = No
     engine = BudgetEngine(async_session_factory)
     bid = uuid.UUID(budget_id) if budget_id else None
     return await engine.get_spend_by_initiative(uuid.UUID(initiative_id), budget_id=bid)
+
+
+@router.get("/{initiative_id}/cost")
+async def get_initiative_cost(initiative_id: str):
+    """Get LLM token usage and estimated cost breakdown for this initiative."""
+    if _initiative_cost_tracker is None:
+        raise HTTPException(status_code=503, detail="Cost tracker not initialized")
+    return {
+        "initiative_id": initiative_id,
+        **_initiative_cost_tracker.get_initiative_cost(initiative_id),
+    }
 
 
 # --- Internal ---

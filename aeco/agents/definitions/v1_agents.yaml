@@ -498,7 +498,7 @@ agents:
       model: anthropic/claude-sonnet-4
       temperature: 0.4
       max_tokens: 4096
-    tools: [facebook_get_campaigns, facebook_get_insights, facebook_update_campaign, facebook_create_campaign, metrics_read]
+    tools: [facebook_get_campaigns, facebook_get_adsets, facebook_get_ads, facebook_get_insights, facebook_get_account_overview, facebook_diagnose_cpm, facebook_diagnose_zero_conversions, facebook_update_campaign, facebook_update_adset, facebook_create_campaign, facebook_create_adset, metrics_read]
     permissions: [facebook:read, facebook:write, metrics:read]
 
   - agent_id: content_creator
@@ -642,7 +642,24 @@ agents:
       model: anthropic/claude-sonnet-4
       temperature: 0.4
       max_tokens: 4096
-    tools: [facebook_get_campaigns, facebook_get_insights, facebook_update_campaign, facebook_create_campaign, metrics_read]
+    tools: [facebook_get_campaigns, facebook_get_adsets, facebook_get_ads, facebook_get_insights, facebook_get_account_overview, facebook_diagnose_cpm, facebook_diagnose_zero_conversions, facebook_update_campaign, facebook_update_adset, facebook_create_campaign, facebook_create_adset, metrics_read]
+    permissions: [facebook:read, facebook:write, metrics:read]
+
+  - agent_id: campaign_manager
+    name: Campaign Manager
+    role: marketing
+    department: marketing
+    system_prompt_path: aeco/agents/prompts/campaign_manager.md
+    executor: claude_code
+    claude_code_config:
+      max_turns: 15
+      timeout_seconds: 600
+    llm_config:
+      provider: openrouter
+      model: anthropic/claude-sonnet-4
+      temperature: 0.3
+      max_tokens: 4096
+    tools: [facebook_get_campaigns, facebook_get_adsets, facebook_get_ads, facebook_get_insights, facebook_get_account_overview, facebook_diagnose_cpm, facebook_diagnose_zero_conversions, facebook_update_campaign, facebook_update_adset, facebook_create_campaign, facebook_create_adset, facebook_creative_report, facebook_generate_ad_copy, metrics_read]
     permissions: [facebook:read, facebook:write, metrics:read]
 
   - agent_id: email_marketer

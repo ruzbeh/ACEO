@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     initiative_task_timeout_seconds: int = 600
 
     # Facebook/Meta Ads API
+    facebook_app_id: Optional[str] = None
+    facebook_app_secret: Optional[str] = None
     facebook_access_token: Optional[str] = None
     facebook_ad_account_id: str = ""
 

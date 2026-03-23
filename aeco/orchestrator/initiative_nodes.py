@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from aeco.agents.executor_factory import create_executor
 from aeco.agents.registry import AgentRegistry
 from aeco.audit.logger import AuditLogger
+from aeco.budget.initiative_costs import InitiativeCostTracker
 from aeco.config import settings
 from aeco.context.builder import ContextBuilder
 from aeco.events import (
@@ -27,6 +28,7 @@ from aeco.events import (
 )
 from aeco.logging.company_logger import log_initiative_node
 from aeco.memory.decision_ledger import DecisionLedgerStore
+from aeco.memory.initiative_memory import InitiativeMemory
 from aeco.orchestrator.initiative_state import InitiativeState
 from aeco.tools.postmortem_tools import git_workspace_snapshot
 
@@ -63,6 +65,22 @@ def _execution_timeline_text(state: InitiativeState) -> str:
     return "\n".join(lines) if lines else "(no structured execution steps recorded)"
 
 
+class _WorkspaceLock:
+    """Simple async lock per workspace path to prevent parallel initiative git conflicts."""
+    _locks: dict[str, asyncio.Lock] = {}
+
+    @classmethod
+    def get(cls, workspace_path: str) -> asyncio.Lock:
+        if workspace_path not in cls._locks:
+            cls._locks[workspace_path] = asyncio.Lock()
+        return cls._locks[workspace_path]
+
+    @classmethod
+    def is_locked(cls, workspace_path: str) -> bool:
+        lock = cls._locks.get(workspace_path)
+        return lock.locked() if lock else False
+
+
 class InitiativeNodes:
     """Node functions for initiative-level orchestration."""
 
@@ -79,6 +97,31 @@ class InitiativeNodes:
         self.ctx = context_builder
         self.ledger = decision_ledger
         self.budget = budget_engine
+        self.memory = InitiativeMemory()
+        self.cost_tracker = InitiativeCostTracker()
+
+    def _track_cost(self, initiative_id: str, agent_id: str, result: dict) -> None:
+        """Extract token usage from an agent result and record cost."""
+        try:
+            usage = result.get("usage_metadata") or result.get("usage") or {}
+            input_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0)
+            output_tokens = usage.get("output_tokens", 0) or usage.get("completion_tokens", 0)
+            total = usage.get("total_tokens", 0)
+            # Fallback: if only total_tokens provided, split roughly 70/30
+            if total and not input_tokens and not output_tokens:
+                input_tokens = int(total * 0.7)
+                output_tokens = total - input_tokens
+            if input_tokens or output_tokens:
+                model = result.get("model", "claude-sonnet-4")
+                self.cost_tracker.record_usage(
+                    initiative_id=initiative_id,
+                    agent_id=agent_id,
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                )
+        except Exception as e:
+            logger.debug(f"Cost tracking failed for {agent_id}: {e}")
 
     # ------------------------------------------------------------------
     # team delegation: route task to best specialist
@@ -133,6 +176,53 @@ class InitiativeNodes:
     # intake: initialize the initiative workflow
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Complexity classification — decides how much ceremony to apply
+    # ------------------------------------------------------------------
+
+    TRIVIAL_KEYWORDS = [
+        "meta tag", "fix typo", "change text", "update copy", "add comment",
+        "rename", "config change", "env variable", "add import", "remove unused",
+        "update version", "add favicon", "add icon", "verification",
+        "change color", "change font", "update link", "add redirect",
+        "add header", "remove header", "toggle feature flag", "one line",
+        "1 line", "single line", "privacy policy", "update wording",
+    ]
+
+    SMALL_KEYWORDS = [
+        "add component", "fix bug", "update styling", "add page", "add route",
+        "add endpoint", "add validation", "update form", "fix responsive",
+        "add loading", "add error handling", "add toast", "add modal",
+    ]
+
+    @staticmethod
+    def _classify_complexity(title: str, goal: str) -> str:
+        """Classify initiative complexity to decide routing.
+
+        Returns: 'trivial' | 'small' | 'standard'
+        - trivial: 1 file, config, meta tag, typo → Engineer only (~30s)
+        - small: 2-5 files, feature tweak → Task Planner + Engineer + QA (~3min)
+        - standard: new feature, multi-file → Full pipeline (~10min)
+        """
+        text = (title + " " + goal).lower()
+
+        for kw in InitiativeNodes.TRIVIAL_KEYWORDS:
+            if kw in text:
+                return "trivial"
+
+        for kw in InitiativeNodes.SMALL_KEYWORDS:
+            if kw in text:
+                return "small"
+
+        # Heuristic: short goal with few words = likely trivial or small
+        word_count = len(goal.split())
+        if word_count < 15:
+            return "trivial"
+        if word_count < 30:
+            return "small"
+
+        return "standard"
+
     async def intake(self, state: InitiativeState) -> dict:
         log_initiative_node(
             "intake",
@@ -140,14 +230,32 @@ class InitiativeNodes:
             initiative_id=state["initiative_id"],
         )
         logger.info(f"Initiative intake: {state['title']}")
+
+        complexity = self._classify_complexity(
+            state.get("title", ""), state.get("goal", "")
+        )
+        logger.info(f"Initiative complexity: {complexity} for '{state['title']}'")
+
+        # Route based on complexity
+        if complexity == "trivial":
+            next_phase = "task_planning"  # Skip PM, Architect, Security
+            logger.info("TRIVIAL: skipping PM → Architect → Security, going straight to task planning")
+        elif complexity == "small":
+            next_phase = "task_planning"  # Skip PM and Architect
+            logger.info("SMALL: skipping PM → Architect → Security, going to task planning")
+        else:
+            next_phase = "pm_spec"  # Full pipeline
+
         await event_bus.emit(INITIATIVE_PHASE_CHANGED, {
             "initiative_id": state["initiative_id"],
-            "phase": "pm_spec",
+            "phase": next_phase,
             "title": state["title"],
+            "complexity": complexity,
         })
         return {
-            "current_phase": "pm_spec",
-            "messages": [_msg("system", "status", f"Initiative started: {state['title']}")],
+            "current_phase": next_phase,
+            "complexity": complexity,
+            "messages": [_msg("system", "status", f"Initiative started ({complexity}): {state['title']}")],
         }
 
     # ------------------------------------------------------------------
@@ -178,6 +286,7 @@ class InitiativeNodes:
         )
 
         result = await runtime.execute(context)
+        self._track_cost(state["initiative_id"], "pm_agent", result)
 
         prd = result.get("prd", result)
         metrics = result.get("metrics", {})
@@ -249,6 +358,7 @@ class InitiativeNodes:
         )
 
         result = await runtime.execute(context)
+        self._track_cost(state["initiative_id"], "chief_architect", result)
         design_doc = json.dumps(result.get("design_document", result), indent=2)
 
         await self.ledger.record(
@@ -325,6 +435,7 @@ class InitiativeNodes:
         )
 
         result = await runtime.execute(context)
+        self._track_cost(state["initiative_id"], "security_reviewer", result)
         review = result.get("security_review", {})
         risk_level = review.get("risk_level", "low")
         cleared = review.get("cleared", True)
@@ -399,6 +510,18 @@ class InitiativeNodes:
             "budget_remaining": state.get("budget_remaining", 0.0),
         }
 
+        # Inject lessons from past initiatives (institutional memory)
+        try:
+            past_lessons = await self.memory.get_relevant_lessons(
+                title=state.get("title", ""),
+                workspace_path=state.get("workspace_path", ""),
+            )
+            if past_lessons:
+                extra["past_lessons"] = past_lessons
+                logger.info(f"Injected {len(past_lessons)} past lessons into task planning context")
+        except Exception as e:
+            logger.debug(f"Could not fetch past lessons: {e}")
+
         # On iterate: inject evaluation feedback so task planner can adapt
         if state.get("evaluation") and state.get("iteration_count", 0) > 0:
             prev_eval = state["evaluation"]
@@ -427,6 +550,7 @@ class InitiativeNodes:
         )
 
         result = await runtime.execute(context)
+        self._track_cost(state["initiative_id"], "task_planner", result)
         task_graph = result.get("task_graph", [])
 
         await self.ledger.record(
@@ -570,6 +694,7 @@ class InitiativeNodes:
                 result = await asyncio.wait_for(
                     runtime.execute(context), timeout=timeout_seconds,
                 )
+                self._track_cost(state["initiative_id"], agent_id, result)
             except asyncio.TimeoutError:
                 logger.warning(f"Task '{task_title}' timed out after {timeout_seconds}s")
                 results.append({
@@ -661,11 +786,12 @@ class InitiativeNodes:
             return None
 
     async def _git_auto_branch(self, workspace_path: str, initiative_id: str) -> str | None:
-        """Create a feature branch for this initiative if not already on one."""
+        """Create a feature branch for this initiative, always based on latest main."""
         if not workspace_path:
             return None
         branch_name = f"aeco/initiative-{initiative_id[:8]}"
         try:
+            # Check current branch
             proc = await asyncio.create_subprocess_exec(
                 "git", "rev-parse", "--abbrev-ref", "HEAD",
                 cwd=workspace_path,
@@ -676,15 +802,50 @@ class InitiativeNodes:
             if current == branch_name:
                 return branch_name  # Already on the right branch
 
-            # Create and checkout the branch
+            # Step 1: Stash any uncommitted changes
+            proc = await asyncio.create_subprocess_exec(
+                "git", "stash", "--include-untracked",
+                cwd=workspace_path,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            stash_out, _ = await proc.communicate()
+            has_stash = b"No local changes" not in stash_out
+
+            # Step 2: Checkout main and pull latest
+            proc = await asyncio.create_subprocess_exec(
+                "git", "checkout", "main",
+                cwd=workspace_path,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            await proc.communicate()
+
+            proc = await asyncio.create_subprocess_exec(
+                "git", "pull", "--rebase", "origin", "main",
+                cwd=workspace_path,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            await proc.communicate()
+            # Ignore pull failures (offline, no remote, etc.)
+
+            # Step 3: Create feature branch from main
             proc = await asyncio.create_subprocess_exec(
                 "git", "checkout", "-B", branch_name,
                 cwd=workspace_path,
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
             )
             await proc.communicate()
+
+            # Step 4: Pop stash if we had one
+            if has_stash:
+                proc = await asyncio.create_subprocess_exec(
+                    "git", "stash", "pop",
+                    cwd=workspace_path,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                )
+                await proc.communicate()
+
             if proc.returncode == 0:
-                logger.info(f"Git: created branch {branch_name} in {workspace_path}")
+                logger.info(f"Git: created branch {branch_name} from main in {workspace_path}")
                 return branch_name
             else:
                 logger.warning(f"Git: failed to create branch {branch_name}")
@@ -738,7 +899,29 @@ class InitiativeNodes:
             return False
 
     async def execute_tasks(self, state: InitiativeState) -> dict:
-        """Execute tasks from the task graph with QA retry and concurrent execution."""
+        """Execute tasks from the task graph with QA retry and concurrent execution.
+
+        Acquires a workspace lock to prevent parallel initiatives from conflicting.
+        """
+        workspace_path = state.get("workspace_path", "")
+
+        # Acquire workspace lock — blocks if another initiative is using this workspace
+        if workspace_path:
+            lock = _WorkspaceLock.get(workspace_path)
+            if lock.locked():
+                logger.info(
+                    f"Workspace {workspace_path} is locked by another initiative. Waiting..."
+                )
+            await lock.acquire()
+
+        try:
+            return await self._execute_tasks_inner(state)
+        finally:
+            if workspace_path:
+                _WorkspaceLock.get(workspace_path).release()
+
+    async def _execute_tasks_inner(self, state: InitiativeState) -> dict:
+        """Inner execute_tasks — called under workspace lock."""
         logger.info("Executing task graph")
         task_graph = state.get("task_graph", [])
         log_initiative_node(
@@ -914,6 +1097,7 @@ class InitiativeNodes:
             }
 
         result = await runtime.execute(context)
+        self._track_cost(state["initiative_id"], "agent_evaluator", result)
 
         verdict = result.get("verdict", "iterate")
         if verdict not in ("scale", "iterate", "kill"):
@@ -1021,6 +1205,7 @@ class InitiativeNodes:
                 runtime.execute(context),
                 timeout=getattr(settings, "acceptance_test_timeout_seconds", 300),
             )
+            self._track_cost(state["initiative_id"], "acceptance_tester", result)
         except Exception as e:
             logger.error(f"Acceptance test failed with error: {e}")
             result = {"approved": False, "summary": f"Acceptance test crashed: {e}", "issues": []}
@@ -1269,6 +1454,7 @@ class InitiativeNodes:
                     ),
                 }
                 result = await runtime.execute(context)
+                self._track_cost(state["initiative_id"], "postmortem_writer", result)
                 postmortem = result.get("postmortem", result)
 
                 # Record postmortem decision
@@ -1319,6 +1505,46 @@ class InitiativeNodes:
                 logger.info(f"Postmortem written for initiative {state['initiative_id']}")
             except Exception as e:
                 logger.warning(f"Postmortem writer failed: {e}")
+
+        # Record institutional memory — lessons from this initiative
+        try:
+            lessons: list[str] = []
+            what_worked: list[str] = []
+            what_failed: list[str] = []
+
+            # Extract from postmortem result if available
+            if verdict in ("kill", "iterate"):
+                try:
+                    postmortem_data = postmortem  # noqa: F821 — set in postmortem block above
+                    lessons.extend(postmortem_data.get("lessons_learned", []))
+                    what_failed.extend(postmortem_data.get("what_went_wrong", []))
+                except NameError:
+                    pass
+
+            # Extract from evaluator reasoning
+            evaluation = state.get("evaluation") or {}
+            if evaluation.get("reasoning"):
+                lessons.append(f"Evaluator: {evaluation['reasoning'][:300]}")
+
+            # Extract from failed task errors
+            for ex_result in state.get("execution_results", []):
+                if ex_result.get("status") == "failed" and ex_result.get("error"):
+                    what_failed.append(f"Task '{ex_result.get('title', '?')}' failed: {ex_result['error'][:200]}")
+                elif ex_result.get("status") == "completed":
+                    what_worked.append(f"Task '{ex_result.get('title', '?')}' completed by {ex_result.get('agent_id', '?')}")
+
+            if lessons or what_worked or what_failed:
+                await self.memory.record_lesson(
+                    initiative_id=state["initiative_id"],
+                    title=state.get("title", ""),
+                    verdict=verdict,
+                    workspace_path=state.get("workspace_path", ""),
+                    lessons=lessons,
+                    what_worked=what_worked,
+                    what_failed=what_failed,
+                )
+        except Exception as e:
+            logger.debug(f"Failed to record institutional memory: {e}")
 
         await event_bus.emit(INITIATIVE_CLOSED, {
             "initiative_id": state["initiative_id"],

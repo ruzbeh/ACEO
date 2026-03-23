@@ -21,8 +21,17 @@ from aeco.tools.deploy_tools import deploy_preview, deploy_production, deploy_ro
 from aeco.tools.devops_tools import dev_server_start, dev_server_stop, package_install
 from aeco.tools.facebook_tools import (
     facebook_create_campaign,
+    facebook_create_adset,
+    facebook_creative_report,
+    facebook_diagnose_cpm,
+    facebook_diagnose_zero_conversions,
+    facebook_generate_ad_copy,
+    facebook_get_account_overview,
+    facebook_get_ads,
+    facebook_get_adsets,
     facebook_get_campaigns,
     facebook_get_insights,
+    facebook_update_adset,
     facebook_update_campaign,
 )
 from aeco.tools.file_tools import file_read, file_write
@@ -77,9 +86,18 @@ def register_all_tools(gateway: ToolGateway) -> None:
     gateway.register("telemetry_query", telemetry_query, {"telemetry:read"})
     # Facebook/Meta Ads
     gateway.register("facebook_get_campaigns", facebook_get_campaigns, {"facebook:read"})
+    gateway.register("facebook_get_adsets", facebook_get_adsets, {"facebook:read"})
+    gateway.register("facebook_get_ads", facebook_get_ads, {"facebook:read"})
     gateway.register("facebook_get_insights", facebook_get_insights, {"facebook:read"})
+    gateway.register("facebook_get_account_overview", facebook_get_account_overview, {"facebook:read"})
+    gateway.register("facebook_diagnose_cpm", facebook_diagnose_cpm, {"facebook:read"})
+    gateway.register("facebook_diagnose_zero_conversions", facebook_diagnose_zero_conversions, {"facebook:read"})
     gateway.register("facebook_update_campaign", facebook_update_campaign, {"facebook:write"})
+    gateway.register("facebook_update_adset", facebook_update_adset, {"facebook:write"})
     gateway.register("facebook_create_campaign", facebook_create_campaign, {"facebook:write"})
+    gateway.register("facebook_create_adset", facebook_create_adset, {"facebook:write"})
+    gateway.register("facebook_creative_report", facebook_creative_report, {"facebook:read"})
+    gateway.register("facebook_generate_ad_copy", facebook_generate_ad_copy, {"facebook:read"})
     # Stripe
     gateway.register("stripe_get_mrr", stripe_get_mrr, {"stripe:read"})
     gateway.register("stripe_get_revenue", stripe_get_revenue, {"stripe:read"})

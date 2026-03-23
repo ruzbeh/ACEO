@@ -1,10 +1,12 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { useHealth } from '../../api/health';
+import { useInitiativeNotifications } from '../../hooks/useInitiativeNotifications';
 import { WifiOff } from 'lucide-react';
 
 export function AppShell() {
   const { isError } = useHealth();
+  useInitiativeNotifications();
 
   return (
     <div className="flex h-screen overflow-hidden">

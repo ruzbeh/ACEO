@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { Copy, Loader2 } from 'lucide-react';
+import { Copy, Loader2, RefreshCw } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { VerdictBadge } from './VerdictBadge';
+import { useRunInitiative } from '../../api/initiatives';
 import { INITIATIVE_STATUS_COLORS } from '../../lib/constants';
 import { formatDate, formatExactDateTime } from '../../lib/utils';
 import type { InitiativeResponse } from '../../api/types';
@@ -14,6 +15,7 @@ interface Props {
 
 export function InitiativeCard({ initiative, onCopy }: Props) {
   const nav = useNavigate();
+  const rerun = useRunInitiative();
 
   return (
     <Card onClick={() => nav(`/initiatives/${initiative.id}`)}>
@@ -23,6 +25,20 @@ export function InitiativeCard({ initiative, onCopy }: Props) {
           <p className="mt-1 line-clamp-2 text-xs text-gray-400">{initiative.goal}</p>
         </div>
         <div className="flex items-center gap-1.5">
+          {initiative.status === 'closed' && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                rerun.mutate({ initiative_id: initiative.id });
+              }}
+              disabled={rerun.isPending}
+              className="rounded p-1.5 text-gray-400 hover:bg-gray-700 hover:text-gray-200 disabled:opacity-50"
+              title="Rerun initiative"
+            >
+              <RefreshCw size={14} className={rerun.isPending ? 'animate-spin' : ''} />
+            </button>
+          )}
           {onCopy && (
             <button
               type="button"

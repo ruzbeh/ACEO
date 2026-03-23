@@ -24,6 +24,15 @@ from aeco.orchestrator.initiative_state import InitiativeState
 logger = logging.getLogger(__name__)
 
 
+def _post_intake(state: InitiativeState) -> str:
+    """After intake: route based on complexity classification."""
+    phase = state.get("current_phase", "pm_spec")
+    if phase == "task_planning":
+        # trivial or small — skip PM/Architect/Security
+        return "task_planning"
+    return "pm_spec"
+
+
 def _post_security_review(state: InitiativeState) -> str:
     """After security review, proceed to task planning or close if critical."""
     if state.get("current_phase") == "closed":
@@ -85,9 +94,19 @@ def build_initiative_graph(
     graph.add_node("acceptance_test", nodes.acceptance_test)
     graph.add_node("close", nodes.close)
 
-    # Edges: linear pipeline with gates
+    # Edges: smart routing based on complexity
     graph.set_entry_point("intake")
-    graph.add_edge("intake", "pm_spec")
+
+    # Intake routes: trivial/small → task_planning, standard → pm_spec
+    graph.add_conditional_edges(
+        "intake",
+        _post_intake,
+        {
+            "pm_spec": "pm_spec",
+            "task_planning": "task_planning",
+        },
+    )
+
     graph.add_edge("pm_spec", "architect")
     graph.add_edge("architect", "security_review")
 
@@ -127,4 +146,7 @@ def build_initiative_graph(
 
     graph.add_edge("close", END)
 
-    return graph.compile()
+    compiled = graph.compile()
+    # Expose the nodes instance so callers can access cost_tracker, memory, etc.
+    compiled._initiative_nodes = nodes  # type: ignore[attr-defined]
+    return compiled

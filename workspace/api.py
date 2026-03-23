@@ -20,6 +20,7 @@ from test_reporter import TestReporter
 # Bug detection imports
 from bug_detection.bug_detector import BugDetector, create_default_detector, create_detector_with_config
 from bug_detection.models import DetectorConfig, BugFinding, BugReport, FixSuggestion, Severity
+from bug_detection.fix_suggestion_engine import FixSuggestionEngine
 from bug_detection.api_models import (
     AnalysisRequest, AnalysisResponse, FileAnalysisRequest, FileAnalysisResponse,
     AnalysisResultsResponse, DetectorsResponse, FixSuggestionRequest, FixSuggestionResponse,
@@ -49,9 +50,20 @@ test_runner = TestRunner(config_manager)
 
 # Initialize bug detection components
 bug_detector = create_default_detector()
+fix_suggestion_engine = FixSuggestionEngine()
 
 # In-memory task tracking for transient run state (started/processing only)
 analysis_tasks: Dict[str, Dict[str, Any]] = {}
+
+# Prompt injection markers that must be rejected in user-supplied context
+_INJECTION_PATTERNS = [
+    "ignore previous instructions",
+    "ignore all previous",
+    "disregard previous",
+    "forget previous instructions",
+    "you are now",
+    "override instructions",
+]
 
 
 def _check_api_key(x_api_key: Optional[str]) -> None:
@@ -59,6 +71,30 @@ def _check_api_key(x_api_key: Optional[str]) -> None:
     expected = os.environ.get("API_KEY", "")
     if not x_api_key or x_api_key != expected:
         raise HTTPException(status_code=401, detail="Unauthorized: invalid or missing API key")
+
+
+def _sanitize_context(context: Optional[str]) -> Optional[str]:
+    """Sanitize optional context: strip whitespace, truncate to 500 chars, reject injection attempts.
+
+    Raises:
+        HTTPException 422: if context contains a prompt injection marker.
+    """
+    if context is None:
+        return None
+    ctx = context.strip()[:500]
+    if any(pat in ctx.lower() for pat in _INJECTION_PATTERNS):
+        raise HTTPException(status_code=422, detail="Context contains disallowed content")
+    return ctx
+
+
+def _confidence_label(confidence) -> str:
+    """Map a Confidence enum value (or string) to a lowercase response label."""
+    val = confidence if isinstance(confidence, str) else confidence.value
+    if val == "HIGH":
+        return "high"
+    if val == "MEDIUM":
+        return "medium"
+    return "low"
 
 
 # Background task for running analysis
@@ -345,8 +381,16 @@ async def get_available_detectors() -> DetectorsResponse:
 
 
 @app.post("/api/bugs/fix-suggestions", response_model=FixSuggestionResponse)
-async def get_fix_suggestions(request: FixSuggestionRequest) -> FixSuggestionResponse:
+async def get_fix_suggestions(
+    request: FixSuggestionRequest,
+    x_api_key: Optional[str] = Header(default=None),
+) -> FixSuggestionResponse:
     """Get fix suggestions for specific bug findings."""
+    _check_api_key(x_api_key)
+
+    if not bug_detector.config.include_suggestions:
+        raise HTTPException(status_code=403, detail="Fix suggestions are disabled by configuration")
+
     try:
         # Look up the finding directly from the DB
         finding = analysis_store.find_finding(request.finding_id)
@@ -354,38 +398,68 @@ async def get_fix_suggestions(request: FixSuggestionRequest) -> FixSuggestionRes
         if not finding:
             raise HTTPException(status_code=404, detail=f"Bug finding not found: {request.finding_id}")
 
-        # Generate fix suggestions using the bug reporter
-        suggestions = bug_detector.bug_reporter.suggest_fixes(finding)
+        # Sanitize context: strip whitespace, truncate, reject injection attempts
+        sanitized_context = _sanitize_context(request.context)
 
-        # Determine overall confidence
-        if suggestions:
-            confidence_levels = [s.confidence for s in suggestions]
-            if any(c == "HIGH" for c in confidence_levels):
-                overall_confidence = "high"
-            elif any(c == "MEDIUM" for c in confidence_levels):
-                overall_confidence = "medium"
-            else:
-                overall_confidence = "low"
-        else:
-            overall_confidence = "low"
-            # Provide a default suggestion
-            suggestions = [FixSuggestion(
-                description="Manual review recommended",
-                code_change="Please review the code manually and apply appropriate fixes",
-                confidence="LOW",
-                impact="UNKNOWN",
-                references=[]
-            )]
+        # Generate fix suggestion using FixSuggestionEngine
+        suggestion = fix_suggestion_engine.generate(finding, sanitized_context)
 
-        logger.info(f"Generated {len(suggestions)} fix suggestions for finding {request.finding_id}")
+        overall_confidence = _confidence_label(suggestion.confidence)
+
+        logger.info(f"Generated fix suggestion for finding {request.finding_id}")
 
         return FixSuggestionResponse(
-            suggestions=suggestions,
+            suggestions=[suggestion],
             confidence=overall_confidence
         )
 
     except HTTPException:
         raise
+    except ValueError as e:
+        logger.error(f"Fix suggestion service unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail="Fix suggestion service unavailable: missing API key")
+    except Exception as e:
+        logger.error(f"Error generating fix suggestions: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate suggestions: {str(e)}")
+
+
+@app.post("/api/findings/{id}/fix-suggestions", response_model=FixSuggestionResponse)
+async def get_fix_suggestions_by_finding_id(
+    id: str,
+    request: Optional[FixSuggestionRequest] = None,
+    x_api_key: Optional[str] = Header(default=None),
+) -> FixSuggestionResponse:
+    """Get fix suggestions for a finding by path parameter (RESTful alias)."""
+    _check_api_key(x_api_key)
+
+    if not bug_detector.config.include_suggestions:
+        raise HTTPException(status_code=403, detail="Fix suggestions are disabled by configuration")
+
+    try:
+        finding = analysis_store.find_finding(id)
+
+        if not finding:
+            raise HTTPException(status_code=404, detail=f"Bug finding not found: {id}")
+
+        context = request.context if request else None
+        sanitized_context = _sanitize_context(context)
+
+        suggestion = fix_suggestion_engine.generate(finding, sanitized_context)
+
+        overall_confidence = _confidence_label(suggestion.confidence)
+
+        logger.info(f"Generated fix suggestion for finding {id}")
+
+        return FixSuggestionResponse(
+            suggestions=[suggestion],
+            confidence=overall_confidence
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.error(f"Fix suggestion service unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail="Fix suggestion service unavailable: missing API key")
     except Exception as e:
         logger.error(f"Error generating fix suggestions: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate suggestions: {str(e)}")
