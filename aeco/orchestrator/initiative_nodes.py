@@ -1553,13 +1553,26 @@ class InitiativeNodes:
         result = await runtime.execute(context)
         self._track_cost(state["initiative_id"], "agent_evaluator", result)
 
-        verdict = result.get("verdict", "iterate")
+        verdict = result.get("verdict", "")
+        is_fallback = result.get("parse_error") or not verdict
+
         if verdict not in ("scale", "iterate", "kill"):
-            verdict = "iterate"
+            # If evaluator couldn't parse OR returned no verdict:
+            # Default to "scale" if we have completed tasks (ship what works)
+            # Default to "kill" if all tasks failed
+            if completed > 0:
+                verdict = "scale"
+                logger.warning(f"Evaluator returned no valid verdict (got '{result.get('verdict', '')}'), "
+                               f"defaulting to 'scale' because {completed}/{len(execution_results)} tasks completed")
+            else:
+                verdict = "kill"
+                logger.warning(f"Evaluator returned no valid verdict, defaulting to 'kill' (0 completed tasks)")
 
         # If iterate and we haven't hit max iterations, loop back
+        # But DON'T iterate if the evaluator itself failed (prevents infinite loops)
         can_iterate = (
             verdict == "iterate"
+            and not is_fallback
             and state.get("iteration_count", 0) < state.get("max_iterations", 3)
         )
 
