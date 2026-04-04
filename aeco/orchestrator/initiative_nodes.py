@@ -100,6 +100,56 @@ class InitiativeNodes:
         self.memory = InitiativeMemory()
         self.cost_tracker = InitiativeCostTracker()
 
+    # ------------------------------------------------------------------
+    # Context compression: reset bloated state on iterate loops
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _compress_prior_context(state: InitiativeState) -> dict:
+        """Compress accumulated execution state into a condensed summary.
+
+        Called before re-entering task_planning on iterate loops so that
+        agents work with a focused context instead of a growing blob of
+        raw outputs from every prior iteration.
+
+        Inspired by Anthropic's harness design article: context *resets*
+        with structured handoffs outperform context compaction.
+        """
+        execution_results = state.get("execution_results") or []
+        decisions = state.get("decisions") or []
+
+        # Summarize execution results: keep title, status, and errors only
+        compressed_results = []
+        for r in execution_results:
+            entry: dict = {
+                "title": r.get("title", ""),
+                "status": r.get("status", "unknown"),
+                "agent_id": r.get("agent_id", ""),
+            }
+            if r.get("error"):
+                entry["error"] = str(r["error"])[:300]
+            # Strip raw output — evaluator feedback replaces it
+            compressed_results.append(entry)
+
+        # Summarize decisions: keep phase, verdict, and short reasoning
+        compressed_decisions = []
+        for d in decisions:
+            compressed_decisions.append({
+                "phase": d.get("phase", ""),
+                "agent": d.get("agent", ""),
+                "verdict": d.get("verdict", d.get("decision", ""))[:200],
+            })
+
+        # Summarize messages: keep only the last 3
+        messages = state.get("messages") or []
+        compressed_messages = messages[-3:] if len(messages) > 3 else messages
+
+        return {
+            "execution_results": compressed_results,
+            "decisions": compressed_decisions,
+            "messages": compressed_messages,
+        }
+
     def _track_cost(self, initiative_id: str, agent_id: str, result: dict) -> None:
         """Extract token usage from an agent result and record cost."""
         try:
@@ -195,16 +245,32 @@ class InitiativeNodes:
         "add loading", "add error handling", "add toast", "add modal",
     ]
 
+    MARKETING_KEYWORDS = [
+        "campaign", "facebook ad", "ad creative", "cpm", "ctr", "roas",
+        "optimize ad", "pause ad", "scale ad", "ad copy", "ad budget",
+        "targeting", "audience", "conversion rate", "facebook pixel",
+        "ad set", "ad account", "marketing", "promote", "boost",
+        "landing page traffic", "retarget", "lookalike", "broad audience",
+        "cost per", "spend", "impressions", "clicks", "creatives",
+        "a/b test ad", "split test", "ad fatigue", "frequency",
+    ]
+
     @staticmethod
     def _classify_complexity(title: str, goal: str) -> str:
-        """Classify initiative complexity to decide routing.
+        """Classify initiative complexity and type to decide routing.
 
-        Returns: 'trivial' | 'small' | 'standard'
+        Returns: 'trivial' | 'small' | 'standard' | 'marketing'
         - trivial: 1 file, config, meta tag, typo → Engineer only (~30s)
         - small: 2-5 files, feature tweak → Task Planner + Engineer + QA (~3min)
         - standard: new feature, multi-file → Full pipeline (~10min)
+        - marketing: ad/campaign work → Campaign Manager agent (~2min)
         """
         text = (title + " " + goal).lower()
+
+        # Check marketing first — these should go to campaign_manager, not engineers
+        marketing_score = sum(1 for kw in InitiativeNodes.MARKETING_KEYWORDS if kw in text)
+        if marketing_score >= 2:
+            return "marketing"
 
         for kw in InitiativeNodes.TRIVIAL_KEYWORDS:
             if kw in text:
@@ -237,11 +303,14 @@ class InitiativeNodes:
         logger.info(f"Initiative complexity: {complexity} for '{state['title']}'")
 
         # Route based on complexity
-        if complexity == "trivial":
-            next_phase = "task_planning"  # Skip PM, Architect, Security
+        if complexity == "marketing":
+            next_phase = "marketing_execute"
+            logger.info("MARKETING: routing to campaign_manager agent")
+        elif complexity == "trivial":
+            next_phase = "task_planning"
             logger.info("TRIVIAL: skipping PM → Architect → Security, going straight to task planning")
         elif complexity == "small":
-            next_phase = "task_planning"  # Skip PM and Architect
+            next_phase = "task_planning"
             logger.info("SMALL: skipping PM → Architect → Security, going to task planning")
         else:
             next_phase = "pm_spec"  # Full pipeline
@@ -256,6 +325,119 @@ class InitiativeNodes:
             "current_phase": next_phase,
             "complexity": complexity,
             "messages": [_msg("system", "status", f"Initiative started ({complexity}): {state['title']}")],
+        }
+
+    # ------------------------------------------------------------------
+    # marketing_execute: route to campaign_manager agent for ad/campaign work
+    # ------------------------------------------------------------------
+
+    async def marketing_execute(self, state: InitiativeState) -> dict:
+        """Execute marketing initiatives through the campaign_manager agent."""
+        logger.info("Marketing initiative: routing to campaign_manager")
+        log_initiative_node(
+            "marketing_execute",
+            "Campaign Manager executing marketing initiative",
+            initiative_id=state["initiative_id"],
+        )
+
+        if not self.registry.has("campaign_manager"):
+            logger.error("campaign_manager agent not found in registry")
+            return {
+                "execution_results": [],
+                "current_phase": "evaluating",
+                "iteration_count": state.get("iteration_count", 0) + 1,
+                "messages": [_msg("system", "error", "campaign_manager agent not found")],
+            }
+
+        agent_def = self.registry.get("campaign_manager")
+        runtime = create_executor(agent_def, self.audit)
+
+        context = {
+            "initiative_id": state["initiative_id"],
+            "title": state["title"],
+            "goal": state["goal"],
+            "hypothesis": state.get("hypothesis", ""),
+            "action": "full_optimization",
+            "product": "Headshot AI",
+            "website_url": "https://www.headshot-generators.com",
+            "target_market": "US professionals aged 25-55",
+            "budget_currency": "USD",
+        }
+
+        # Inject iteration feedback if this is a retry
+        if state.get("evaluation") and state.get("iteration_count", 0) > 0:
+            prev_eval = state["evaluation"]
+            context["iteration_feedback"] = {
+                "previous_verdict": prev_eval.get("verdict", "iterate"),
+                "previous_reasoning": prev_eval.get("reasoning", ""),
+                "what_to_improve": prev_eval.get("what_to_improve", ""),
+            }
+
+        await event_bus.emit(INITIATIVE_TASK_STARTED, {
+            "initiative_id": state["initiative_id"],
+            "task_title": "Campaign Manager optimization",
+            "agent_id": "campaign_manager",
+        })
+
+        try:
+            result = await asyncio.wait_for(
+                runtime.execute(context),
+                timeout=getattr(settings, "initiative_task_timeout_seconds", 600),
+            )
+            self._track_cost(result, "campaign_manager", state["initiative_id"])
+
+            # Extract actions taken by campaign manager
+            actions = result.get("actions", [])
+            recommendations = result.get("recommendations", result.get("budget_recommendations", []))
+
+            execution_results = [{
+                "task_id": "marketing-1",
+                "title": "Campaign Manager optimization",
+                "agent_id": "campaign_manager",
+                "status": "completed",
+                "output": result,
+            }]
+
+            await event_bus.emit(INITIATIVE_TASK_COMPLETED, {
+                "initiative_id": state["initiative_id"],
+                "task_title": "Campaign Manager optimization",
+                "agent_id": "campaign_manager",
+                "status": "completed",
+                "actions_taken": len(actions),
+            })
+
+            logger.info(
+                f"Campaign Manager completed: {len(actions)} actions, "
+                f"{len(recommendations)} recommendations"
+            )
+
+        except asyncio.TimeoutError:
+            execution_results = [{
+                "task_id": "marketing-1",
+                "title": "Campaign Manager optimization",
+                "agent_id": "campaign_manager",
+                "status": "failed",
+                "error": "Campaign manager timed out",
+            }]
+        except Exception as e:
+            logger.error(f"Campaign Manager failed: {e}")
+            execution_results = [{
+                "task_id": "marketing-1",
+                "title": "Campaign Manager optimization",
+                "agent_id": "campaign_manager",
+                "status": "failed",
+                "error": str(e),
+            }]
+
+        return {
+            "execution_results": execution_results,
+            "current_phase": "evaluating",
+            "iteration_count": state.get("iteration_count", 0) + 1,
+            "messages": [_msg("campaign_manager", "marketing_execution", {
+                "total": len(execution_results),
+                "completed": sum(1 for r in execution_results if r["status"] == "completed"),
+                "failed": sum(1 for r in execution_results if r["status"] == "failed"),
+            })],
         }
 
     # ------------------------------------------------------------------
@@ -551,7 +733,62 @@ class InitiativeNodes:
 
         result = await runtime.execute(context)
         self._track_cost(state["initiative_id"], "task_planner", result)
-        task_graph = result.get("task_graph", [])
+
+        # Debug: log what the task planner actually returned
+        result_keys = list(result.keys()) if isinstance(result, dict) else []
+        raw_task_graph = result.get("task_graph")
+        logger.info(
+            f"Task planner result keys: {result_keys}, "
+            f"task_graph type: {type(raw_task_graph).__name__}, "
+            f"task_graph length: {len(raw_task_graph) if isinstance(raw_task_graph, list) else 'N/A'}, "
+            f"has parse_error: {result.get('parse_error', False)}"
+        )
+        # If task_graph is missing but result has task-like keys (task_id, title),
+        # the parser extracted a single task instead of the wrapper — wrap it
+        if not raw_task_graph and "task_id" in result and "title" in result:
+            logger.warning("Task planner returned a single task instead of task_graph wrapper — wrapping it")
+            raw_task_graph = [result]
+        # If task_graph is missing but 'tasks' key exists (alternate naming)
+        if not raw_task_graph and isinstance(result.get("tasks"), list):
+            logger.warning("Task planner used 'tasks' instead of 'task_graph' — using it")
+            raw_task_graph = result["tasks"]
+
+        # Last resort: if still no tasks, try extracting task_graph from raw_response
+        if not raw_task_graph and result.get("raw_response"):
+            import re
+            raw = result["raw_response"]
+            # Try to find task_graph in the raw text
+            match = re.search(r'"task_graph"\s*:\s*\[', raw)
+            if match:
+                # Find the matching ]
+                start = match.start()
+                bracket_start = raw.index('[', start)
+                depth = 0
+                for i in range(bracket_start, len(raw)):
+                    if raw[i] == '[': depth += 1
+                    elif raw[i] == ']': depth -= 1
+                    if depth == 0:
+                        try:
+                            raw_task_graph = json.loads(raw[bracket_start:i+1])
+                            logger.warning(f"Extracted task_graph from raw_response: {len(raw_task_graph)} tasks")
+                        except json.JSONDecodeError:
+                            pass
+                        break
+
+        task_graph = raw_task_graph if isinstance(raw_task_graph, list) else []
+
+        if not task_graph:
+            logger.error(f"Task planner returned 0 tasks. Result keys: {result_keys}. Decision: {str(result.get('decision',''))[:200]}")
+
+        # Sprint contract: extract testable success criteria for this iteration.
+        # The evaluator grades against these specific criteria, not a vague "did it work?"
+        sprint_success_criteria = result.get("sprint_success_criteria", [])
+        if not sprint_success_criteria:
+            # Fallback: aggregate acceptance_criteria from all tasks
+            sprint_success_criteria = []
+            for task in task_graph:
+                for criterion in task.get("acceptance_criteria", []):
+                    sprint_success_criteria.append(f"[{task.get('title', 'task')}] {criterion}")
 
         await self.ledger.record(
             category="initiative",
@@ -577,6 +814,7 @@ class InitiativeNodes:
 
         return {
             "task_graph": task_graph,
+            "sprint_success_criteria": sprint_success_criteria,
             "current_phase": "executing",
             "decisions": [{
                 "agent": "task_planner",
@@ -1050,6 +1288,209 @@ class InitiativeNodes:
 
         return live_metrics
 
+    async def _workspace_smoke_test(self, workspace_path: str) -> dict:
+        """Run a quick build/smoke test on the workspace before evaluation.
+
+        Inspired by Anthropic's harness design article: the evaluator should
+        interact with the built artifact, not just read execution logs.
+        Returns build status, test status, and any error output.
+        """
+        result: dict = {"ran": False, "build_ok": None, "tests_ok": None, "errors": []}
+        if not workspace_path:
+            return result
+
+        import os
+        result["ran"] = True
+
+        # Detect project type and run build
+        has_package_json = os.path.exists(os.path.join(workspace_path, "package.json"))
+        has_pyproject = os.path.exists(os.path.join(workspace_path, "pyproject.toml"))
+        has_requirements = os.path.exists(os.path.join(workspace_path, "requirements.txt"))
+
+        async def _run(cmd: list[str], timeout: int = 60) -> tuple[int, str, str]:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd, cwd=workspace_path,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+                return proc.returncode or 0, stdout.decode()[-2000:], stderr.decode()[-2000:]
+            except asyncio.TimeoutError:
+                return -1, "", f"Command timed out after {timeout}s"
+            except Exception as e:
+                return -1, "", str(e)
+
+        # Build check
+        if has_package_json:
+            code, out, err = await _run(["npm", "run", "build"], timeout=90)
+            result["build_ok"] = code == 0
+            if code != 0:
+                result["errors"].append(f"npm build failed (exit {code}): {err[-500:]}")
+        elif has_pyproject or has_requirements:
+            # For Python projects, try running pytest as the "build" check
+            code, out, err = await _run(["python", "-m", "py_compile", "__init__.py"], timeout=30)
+            # Just mark as ok — Python doesn't have a build step per se
+            result["build_ok"] = True
+
+        # Test check
+        if has_package_json:
+            # Check if test script exists
+            code, out, err = await _run(["npm", "test", "--", "--passWithNoTests", "--watchAll=false"], timeout=90)
+            result["tests_ok"] = code == 0
+            if code != 0:
+                result["errors"].append(f"npm test failed (exit {code}): {err[-500:]}")
+        elif has_pyproject or has_requirements:
+            code, out, err = await _run(["python", "-m", "pytest", "--tb=short", "-q"], timeout=90)
+            result["tests_ok"] = code == 0
+            if code != 0:
+                result["errors"].append(f"pytest failed (exit {code}): {(out + err)[-500:]}")
+
+        logger.info(
+            f"Workspace smoke test: build={'OK' if result['build_ok'] else 'FAIL'}, "
+            f"tests={'OK' if result['tests_ok'] else 'FAIL'}"
+        )
+        return result
+
+    async def _browser_eval(self, workspace_path: str) -> dict:
+        """Start the dev server and use Playwright to interact with the live app.
+
+        This is the key insight from the Anthropic harness design article:
+        the evaluator should literally use the product like a real user,
+        not just read code or execution logs. Catches "last mile" bugs like
+        buttons that exist in code but don't fire on click.
+
+        Only runs for frontend/fullstack projects (has package.json with dev server).
+        Returns structured browser evaluation results.
+        """
+        result: dict = {
+            "ran": False,
+            "is_frontend": False,
+            "server_started": False,
+            "pages_tested": [],
+            "console_errors": [],
+            "page_loads_ok": False,
+            "interactive_elements_found": 0,
+            "errors": [],
+        }
+        if not workspace_path:
+            return result
+
+        import os
+        has_package_json = os.path.exists(os.path.join(workspace_path, "package.json"))
+        if not has_package_json:
+            return result
+
+        result["is_frontend"] = True
+        result["ran"] = True
+        server_url = None
+
+        try:
+            # Step 1: Start dev server
+            from aeco.tools.devops_tools import dev_server_start, dev_server_stop
+
+            server_result = await dev_server_start(workspace_path=workspace_path)
+            if server_result.get("status") != "ok":
+                result["errors"].append(f"Dev server failed to start: {server_result.get('error', 'unknown')}")
+                return result
+
+            port = server_result.get("port", 3000)
+            server_url = f"http://localhost:{port}"
+            result["server_started"] = True
+            logger.info(f"Browser eval: dev server started on {server_url}")
+
+            # Give server time to fully initialize
+            await asyncio.sleep(3)
+
+            # Step 2: Browse the app with Playwright
+            from aeco.tools.browser_tools import (
+                browser_close,
+                browser_console_errors,
+                browser_get_text,
+                browser_screenshot,
+            )
+
+            # Test 1: Load the homepage — does it render without errors?
+            homepage = await browser_console_errors(server_url, wait_seconds=3, workspace_path=workspace_path)
+            page_result = {
+                "url": server_url,
+                "loaded": homepage.get("status") == "ok",
+                "title": homepage.get("title", ""),
+                "errors": homepage.get("errors", []),
+                "page_errors": homepage.get("page_errors", []),
+            }
+            result["pages_tested"].append(page_result)
+            result["console_errors"].extend(homepage.get("errors", []))
+
+            if homepage.get("status") != "ok":
+                result["errors"].append(f"Homepage failed to load: {homepage.get('error', '')}")
+            else:
+                result["page_loads_ok"] = True
+
+                # Test 2: Get page text — is there meaningful content?
+                text_result = await browser_get_text(server_url, workspace_path=workspace_path)
+                page_text = text_result.get("text", "")
+                result["page_text_length"] = len(page_text)
+                result["page_text_preview"] = page_text[:500]
+
+                # Test 3: Screenshot for visual verification
+                screenshot = await browser_screenshot(server_url, workspace_path=workspace_path)
+                if screenshot.get("status") == "ok":
+                    result["screenshot_taken"] = True
+                    # Don't include base64 in evaluator context (too large),
+                    # just note whether it succeeded and any console errors found
+                    result["console_errors"].extend(screenshot.get("console_errors", []))
+
+                # Test 4: Try common navigation links
+                for path in ["/about", "/dashboard", "/login", "/settings", "/app"]:
+                    test_url = f"{server_url}{path}"
+                    try:
+                        nav_result = await browser_get_text(test_url, workspace_path=workspace_path)
+                        if nav_result.get("status") == "ok" and len(nav_result.get("text", "")) > 50:
+                            result["pages_tested"].append({
+                                "url": test_url,
+                                "loaded": True,
+                                "title": nav_result.get("title", ""),
+                                "text_length": len(nav_result.get("text", "")),
+                            })
+                    except Exception:
+                        pass  # Not all paths will exist — that's fine
+
+            # Deduplicate console errors
+            seen = set()
+            unique_errors = []
+            for err in result["console_errors"]:
+                err_text = err.get("text", str(err)) if isinstance(err, dict) else str(err)
+                if err_text not in seen:
+                    seen.add(err_text)
+                    unique_errors.append(err)
+            result["console_errors"] = unique_errors[:20]
+            result["has_console_errors"] = len(unique_errors) > 0
+
+            logger.info(
+                f"Browser eval: {len(result['pages_tested'])} pages tested, "
+                f"{len(unique_errors)} console errors, "
+                f"page_loads_ok={result['page_loads_ok']}"
+            )
+
+        except Exception as e:
+            result["errors"].append(f"Browser eval failed: {str(e)[:300]}")
+            logger.warning(f"Browser eval error: {e}")
+
+        finally:
+            # Cleanup: stop dev server and close browser
+            try:
+                from aeco.tools.devops_tools import dev_server_stop
+                await dev_server_stop(workspace_path=workspace_path)
+            except Exception as e:
+                logger.debug(f"Dev server cleanup: {e}")
+            try:
+                from aeco.tools.browser_tools import browser_close
+                await browser_close(workspace_path=workspace_path)
+            except Exception as e:
+                logger.debug(f"Browser cleanup: {e}")
+
+        return result
+
     async def evaluate(self, state: InitiativeState) -> dict:
         """Evaluator assesses the initiative and decides verdict."""
         logger.info("Evaluating initiative outcomes")
@@ -1064,6 +1505,16 @@ class InitiativeNodes:
 
         # Auto-inject live metrics from Stripe, Facebook, telemetry
         live_metrics = await self._fetch_live_metrics()
+
+        # Live verification: run build + tests on the workspace before scoring.
+        # The evaluator should judge real artifacts, not just self-reported results.
+        workspace_path = state.get("workspace_path", "")
+        smoke_test = await self._workspace_smoke_test(workspace_path)
+
+        # Browser eval: for frontend projects, start the dev server and actually
+        # browse the app with Playwright. This catches UX-level bugs that pass
+        # builds but fail for real users (e.g., buttons that exist but don't fire).
+        browser_eval = await self._browser_eval(workspace_path)
 
         context = {
             "initiative_id": state["initiative_id"],
@@ -1085,6 +1536,9 @@ class InitiativeNodes:
             "budget_spent": state.get("budget_spent", 0.0),
             "budget_remaining": state.get("budget_remaining", 0.0),
             "live_metrics": live_metrics,
+            "smoke_test": smoke_test,
+            "browser_eval": browser_eval,
+            "sprint_success_criteria": state.get("sprint_success_criteria", []),
         }
 
         # On iterate: inject previous evaluation feedback into context
@@ -1139,7 +1593,7 @@ class InitiativeNodes:
             "verdict": verdict,
         })
 
-        return {
+        update: dict = {
             "evaluation": result,
             "verdict": verdict if not can_iterate else None,
             "current_phase": next_phase,
@@ -1156,6 +1610,21 @@ class InitiativeNodes:
                 "next_phase": next_phase,
             })],
         }
+
+        # Context reset: compress prior state before iterate loop re-enters task_planning.
+        # This prevents context degradation across iterations (see Anthropic harness design article).
+        if can_iterate:
+            compressed = self._compress_prior_context(state)
+            update["execution_results"] = compressed["execution_results"]
+            update["decisions"] = compressed["decisions"] + update["decisions"]
+            update["messages"] = compressed["messages"] + update["messages"]
+            logger.info(
+                f"Context reset: compressed {len(state.get('execution_results', []))} "
+                f"execution results to {len(compressed['execution_results'])} summaries "
+                f"for iteration {state.get('iteration_count', 0) + 1}"
+            )
+
+        return update
 
     # ------------------------------------------------------------------
     # acceptance_test: run the app and verify it actually works
