@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import json
 import logging
 from typing import Any
 
@@ -139,16 +140,29 @@ async def facebook_get_ads(**kwargs: Any) -> dict:
 # 2. INSIGHTS: Performance metrics at every level
 # ──────────────────────────────────────────────────────────────────
 
-_INSIGHT_FIELDS = (
-    "campaign_name,adset_name,ad_name,"
+_INSIGHT_FIELDS_BASE = (
     "spend,impressions,reach,frequency,"
-    "clicks,unique_clicks,ctr,unique_ctr,"
-    "cpc,cpm,cpp,"
-    "actions,cost_per_action_type,action_values,"
-    "conversions,cost_per_conversion,conversion_values,"
-    "video_thruplay_watched_actions,video_p25_watched_actions,"
-    "quality_score_ectr,quality_score_ecvr,quality_score_organic"
+    "clicks,ctr,cpc,cpm,"
+    "actions,cost_per_action_type,action_values"
 )
+# NOTE: Deliberately omitted — these break at certain levels or for accounts
+# without Meta's ad ranking enabled:
+#   quality_score_ectr, quality_score_ecvr, quality_score_organic
+#   conversions, cost_per_conversion, conversion_values
+#   unique_clicks, unique_ctr, cpp
+#   video_thruplay_watched_actions, video_p25_watched_actions
+# If you need them, request per call with a narrow `fields=` override.
+
+
+def _insight_fields_for_level(level: str | None) -> str:
+    """Return base fields plus the name field appropriate for the level."""
+    if level == "campaign":
+        return f"campaign_name,{_INSIGHT_FIELDS_BASE}"
+    if level == "adset":
+        return f"campaign_name,adset_name,{_INSIGHT_FIELDS_BASE}"
+    if level == "ad":
+        return f"campaign_name,adset_name,ad_name,ad_id,{_INSIGHT_FIELDS_BASE}"
+    return _INSIGHT_FIELDS_BASE
 
 
 async def facebook_get_insights(**kwargs: Any) -> dict:
@@ -182,12 +196,12 @@ async def facebook_get_insights(**kwargs: Any) -> dict:
             + (f" broken down by {breakdowns}" if breakdowns else "")
         )
 
+    level = kwargs.get("level")
     params: dict[str, Any] = {
-        "fields": _INSIGHT_FIELDS,
-        "time_range": str(_date_range(date_range)),
+        "fields": _insight_fields_for_level(level),
+        "time_range": json.dumps(_date_range(date_range)),
         "time_increment": time_increment,
     }
-    level = kwargs.get("level")
     if level:
         params["level"] = level
     if breakdowns:
@@ -884,4 +898,566 @@ def facebook_generate_ad_copy(**kwargs: Any) -> dict:
         "style": style,
         "count": len(results),
         "ad_copies": results,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────
+# 6. AUTO-OPTIMIZATION: Pick best ads, scale budgets, funnel progression
+# ──────────────────────────────────────────────────────────────────
+
+
+# Product keyword mappings for filtering ads by product
+_PRODUCT_KEYWORDS: dict[str, list[str]] = {
+    "Headshot AI": [
+        "headshot", "linkedin photo", "portrait", "selfie",
+        "headshot-generators", "professional photo", "ai headshot",
+    ],
+    "Symptom Checker": [
+        "symptom", "symptoms", "triage", "checker", "health check",
+        "symptom checker", "assessment", "telehealth",
+    ],
+}
+
+
+def _matches_product(creative_text: str, product_name: str) -> bool:
+    """Check if creative text contains any keywords for the given product."""
+    text_lower = creative_text.lower()
+    keywords = _PRODUCT_KEYWORDS.get(product_name, [product_name.lower().split()])
+    if isinstance(keywords, list):
+        return any(kw.lower() in text_lower for kw in keywords)
+    return product_name.lower() in text_lower
+
+
+async def facebook_auto_pick_best_ads(
+    product_name: str = "Headshot AI",
+    min_impressions: int = 100,
+    min_ctr: float = 5.0,
+    target_adset_id: str = "",
+    **kwargs: Any,
+) -> dict:
+    """Auto-pick best performing ads for a product and copy them to the target ad set.
+
+    - Fetches ALL ads from the account with lifetime insights
+    - Filters by product (checks creative body/title/link for product keywords)
+    - Ranks by CTR (minimum threshold)
+    - Copies top 5 to the target ad set (skips duplicates)
+    - Returns list of copied ads and skipped ones
+    """
+    if not _get_token():
+        return _mock_response(
+            f"Auto-pick best ads for {product_name}: would fetch all ads, "
+            f"filter by product, rank by CTR >= {min_ctr}%, copy top 5 to {target_adset_id}"
+        )
+
+    if not target_adset_id:
+        return {"error": "target_adset_id is required"}
+
+    account_id = _get_account_id()
+
+    # 1. Fetch ALL ads with creative details and lifetime insights
+    ads_response = await _api_get(
+        f"act_{account_id}/ads",
+        {
+            "fields": (
+                "name,creative{body,title,object_story_spec},"
+                "insights.date_preset(maximum){spend,impressions,ctr,cpm,actions}"
+            ),
+            "limit": "500",
+        },
+    )
+    all_ads = ads_response.get("data", [])
+
+    # 2. Filter by product keywords and performance thresholds
+    candidates = []
+    for ad in all_ads:
+        creative = ad.get("creative", {})
+        body = creative.get("body", "") or ""
+        title = creative.get("title", "") or ""
+        # Check object_story_spec for link URL
+        oss = creative.get("object_story_spec", {}) or {}
+        link_data = oss.get("link_data", {}) or {}
+        link_url = link_data.get("link", "") or ""
+        combined_text = f"{body} {title} {link_url}"
+
+        if not _matches_product(combined_text, product_name):
+            continue
+
+        # Check insights
+        insights_data = ad.get("insights", {}).get("data", [])
+        if not insights_data:
+            continue
+        insight = insights_data[0]
+        impressions = int(insight.get("impressions", 0))
+        ctr = float(insight.get("ctr", 0))
+
+        if impressions < min_impressions:
+            continue
+        if ctr < min_ctr:
+            continue
+
+        candidates.append({
+            "ad_id": ad.get("id"),
+            "ad_name": ad.get("name"),
+            "creative_id": creative.get("id"),
+            "ctr": ctr,
+            "impressions": impressions,
+            "spend": float(insight.get("spend", 0)),
+        })
+
+    # 3. Rank by CTR descending, take top 5
+    candidates.sort(key=lambda x: x["ctr"], reverse=True)
+    top_candidates = candidates[:5]
+
+    # 4. Get existing creative IDs in target ad set to avoid duplicates
+    existing_ads = await _api_get(
+        f"{target_adset_id}/ads",
+        {"fields": "creative{id},name", "limit": "100"},
+    )
+    existing_creative_ids = set()
+    existing_names = set()
+    for existing_ad in existing_ads.get("data", []):
+        ec = existing_ad.get("creative", {})
+        if ec.get("id"):
+            existing_creative_ids.add(ec["id"])
+        existing_names.add(existing_ad.get("name", ""))
+
+    # 5. Copy top performers with [TOP] prefix
+    copied = []
+    skipped = []
+    for candidate in top_candidates:
+        creative_id = candidate.get("creative_id")
+        if creative_id in existing_creative_ids:
+            skipped.append({**candidate, "reason": "creative already exists in target ad set"})
+            continue
+
+        new_name = f"[TOP] {candidate['ad_name']}"
+        if new_name in existing_names:
+            skipped.append({**candidate, "reason": "ad with same name already exists"})
+            continue
+
+        try:
+            result = await _api_post(
+                f"act_{account_id}/ads",
+                {
+                    "adset_id": target_adset_id,
+                    "name": new_name,
+                    "status": "PAUSED",
+                    "creative": f'{{"creative_id": "{creative_id}"}}',
+                },
+            )
+            copied.append({
+                **candidate,
+                "new_ad_id": result.get("id"),
+                "new_name": new_name,
+            })
+        except Exception as e:
+            skipped.append({**candidate, "reason": f"API error: {e}"})
+
+    return {
+        "product_name": product_name,
+        "total_candidates": len(candidates),
+        "copied": copied,
+        "skipped": skipped,
+        "target_adset_id": target_adset_id,
+    }
+
+
+async def facebook_auto_scale_budget(
+    adset_id: str = "",
+    scale_factor: float = 1.2,
+    max_daily_budget_inr: int = 500000,
+    min_ctr: float = 3.0,
+    min_impressions: int = 200,
+    **kwargs: Any,
+) -> dict:
+    """Auto-scale ad set budget if performance is good.
+
+    Rules:
+    - Only scale if CTR >= min_ctr and impressions >= min_impressions
+    - Scale by factor (default 20% increase)
+    - Never exceed max_daily_budget (in paise; default 500000 = Rs5000)
+    - If CTR < 2% or CPM > 5000, REDUCE budget by 20% instead
+    - Returns old_budget, new_budget, action taken, reason
+
+    Note: Account currency is INR. Budgets are in paise (1 rupee = 100 paise).
+    """
+    if not _get_token():
+        return _mock_response(
+            f"Auto-scale budget for ad set {adset_id}: "
+            f"scale={scale_factor}x, max={max_daily_budget_inr} paise, "
+            f"min_ctr={min_ctr}%"
+        )
+
+    if not adset_id:
+        return {"error": "adset_id is required"}
+
+    # 1. Get ad set insights (last 3 days)
+    insights = await _api_get(
+        f"{adset_id}/insights",
+        {
+            "fields": "impressions,ctr,cpm,spend",
+            "date_preset": "last_3d",
+        },
+    )
+    insights_data = insights.get("data", [])
+    if not insights_data:
+        return {
+            "adset_id": adset_id,
+            "action": "HOLD",
+            "reason": "No insights data available for last 3 days — not enough data to make a decision",
+        }
+
+    row = insights_data[0]
+    impressions = int(row.get("impressions", 0))
+    ctr = float(row.get("ctr", 0))
+    cpm = float(row.get("cpm", 0))
+
+    # 2. Get current daily budget
+    adset_info = await _api_get(
+        adset_id,
+        {"fields": "daily_budget,name,status"},
+    )
+    current_budget = int(adset_info.get("daily_budget", 0))  # in paise
+    adset_name = adset_info.get("name", adset_id)
+
+    # 3. Apply rules
+    action = "HOLD"
+    reason = ""
+    new_budget = current_budget
+
+    if ctr < 2.0 or cpm > 5000:
+        # Bad performance — reduce by 20%
+        action = "REDUCE"
+        new_budget = int(current_budget * 0.8)
+        reasons = []
+        if ctr < 2.0:
+            reasons.append(f"CTR is {ctr:.2f}% (below 2% threshold)")
+        if cpm > 5000:
+            reasons.append(f"CPM is {cpm:.0f} paise (above 5000 threshold)")
+        reason = "Poor performance: " + " and ".join(reasons)
+    elif impressions < min_impressions:
+        action = "HOLD"
+        reason = f"Only {impressions} impressions in last 3 days (need {min_impressions}+) — not enough data"
+    elif ctr >= min_ctr:
+        # Good performance — scale up
+        action = "SCALE_UP"
+        new_budget = int(current_budget * scale_factor)
+        reason = f"Strong CTR of {ctr:.2f}% (>= {min_ctr}%) with {impressions} impressions — scaling up {scale_factor}x"
+    else:
+        action = "HOLD"
+        reason = f"CTR is {ctr:.2f}% (between 2% and {min_ctr}%) — mediocre, holding budget"
+
+    # 4. Enforce max budget cap
+    if new_budget > max_daily_budget_inr:
+        new_budget = max_daily_budget_inr
+        reason += f" (capped at max {max_daily_budget_inr} paise = Rs{max_daily_budget_inr/100:.0f})"
+
+    # 5. Apply budget change if needed
+    budget_changed = False
+    if new_budget != current_budget and action in ("SCALE_UP", "REDUCE"):
+        await _api_post(adset_id, {"daily_budget": new_budget})
+        budget_changed = True
+
+    return {
+        "adset_id": adset_id,
+        "adset_name": adset_name,
+        "action": action,
+        "reason": reason,
+        "old_budget_paise": current_budget,
+        "new_budget_paise": new_budget,
+        "old_budget_inr": round(current_budget / 100, 2),
+        "new_budget_inr": round(new_budget / 100, 2),
+        "budget_changed": budget_changed,
+        "metrics": {
+            "impressions_3d": impressions,
+            "ctr": round(ctr, 2),
+            "cpm": round(cpm, 2),
+        },
+    }
+
+
+# Conversion funnel ladder: optimization_goal -> (event name, min events needed, next step index)
+_FUNNEL_LADDER = [
+    {
+        "step": "LANDING_PAGE_VIEWS",
+        "optimization_goal": "LANDING_PAGE_VIEWS",
+        "event_name": "landing_page_view",
+        "min_events": 50,
+    },
+    {
+        "step": "CONTENT_VIEW",
+        "optimization_goal": "OFFSITE_CONVERSIONS",
+        "event_type": "VIEW_CONTENT",
+        "event_name": "offsite_conversion.fb_pixel_view_content",
+        "min_events": 30,
+    },
+    {
+        "step": "COMPLETE_REGISTRATION",
+        "optimization_goal": "OFFSITE_CONVERSIONS",
+        "event_type": "COMPLETE_REGISTRATION",
+        "event_name": "offsite_conversion.fb_pixel_complete_registration",
+        "min_events": 20,
+    },
+    {
+        "step": "INITIATED_CHECKOUT",
+        "optimization_goal": "OFFSITE_CONVERSIONS",
+        "event_type": "INITIATED_CHECKOUT",
+        "event_name": "offsite_conversion.fb_pixel_initiate_checkout",
+        "min_events": 10,
+    },
+    {
+        "step": "PURCHASE",
+        "optimization_goal": "OFFSITE_CONVERSIONS",
+        "event_type": "PURCHASE",
+        "event_name": "offsite_conversion.fb_pixel_purchase",
+        "min_events": 5,
+    },
+]
+
+
+async def facebook_auto_funnel_progression(
+    campaign_id: str = "",
+    product_name: str = "Headshot AI",
+    **kwargs: Any,
+) -> dict:
+    """Automatically progress through the conversion funnel optimization ladder.
+
+    Ladder:
+    1. LANDING_PAGE_VIEWS — start here, need 50+ landing views
+    2. CONTENT_VIEW — need 30+ content views
+    3. COMPLETE_REGISTRATION — need 20+ registrations
+    4. INITIATED_CHECKOUT — need 10+ checkouts
+    5. PURCHASE — need 5+ purchases
+
+    Logic:
+    - Check current active ad set's optimization_goal
+    - Check lifetime event counts from pixel
+    - If current step has enough events, create new ad set at next step
+    - Pause old ad set, copy ads to new one
+    - Keep same budget
+    - Returns: current_step, events_count, next_step, action_taken
+    """
+    if not _get_token():
+        return _mock_response(
+            f"Auto funnel progression for campaign {campaign_id}: "
+            f"check current step, count pixel events, progress if ready"
+        )
+
+    if not campaign_id:
+        return {"error": "campaign_id is required"}
+
+    account_id = _get_account_id()
+
+    # 1. Get campaign's active ad sets
+    adsets_response = await _api_get(
+        f"{campaign_id}/adsets",
+        {
+            "fields": "name,status,daily_budget,optimization_goal,promoted_object,targeting",
+            "effective_status": '["ACTIVE"]',
+            "limit": "20",
+        },
+    )
+    active_adsets = adsets_response.get("data", [])
+    if not active_adsets:
+        return {
+            "campaign_id": campaign_id,
+            "action": "NONE",
+            "reason": "No active ad sets found in this campaign",
+        }
+
+    # Use the first active ad set as the current one
+    current_adset = active_adsets[0]
+    current_goal = current_adset.get("optimization_goal", "")
+    current_budget = int(current_adset.get("daily_budget", 0))
+    current_targeting = current_adset.get("targeting", {})
+
+    # 2. Determine current funnel step
+    current_step_index = 0
+    for i, step in enumerate(_FUNNEL_LADDER):
+        if step["optimization_goal"] == current_goal:
+            # For OFFSITE_CONVERSIONS, check event type in promoted_object
+            if current_goal == "OFFSITE_CONVERSIONS":
+                promoted = current_adset.get("promoted_object", {}) or {}
+                custom_event_type = promoted.get("custom_event_type", "")
+                if step.get("event_type") == custom_event_type:
+                    current_step_index = i
+                    break
+            else:
+                current_step_index = i
+                break
+
+    current_step = _FUNNEL_LADDER[current_step_index]
+
+    # 3. Get lifetime account insights with all action types
+    insights_response = await _api_get(
+        f"act_{account_id}/insights",
+        {
+            "fields": "actions",
+            "date_preset": "maximum",
+            "level": "account",
+        },
+    )
+    insights_data = insights_response.get("data", [{}])
+    actions = insights_data[0].get("actions", []) if insights_data else []
+
+    # Count events at each funnel level
+    event_counts: dict[str, int] = {}
+    for action in actions:
+        action_type = action.get("action_type", "")
+        value = int(action.get("value", 0))
+        event_counts[action_type] = event_counts.get(action_type, 0) + value
+
+    # Map funnel steps to their event counts
+    funnel_status = []
+    for step in _FUNNEL_LADDER:
+        count = event_counts.get(step["event_name"], 0)
+        funnel_status.append({
+            "step": step["step"],
+            "events": count,
+            "required": step["min_events"],
+            "ready": count >= step["min_events"],
+        })
+
+    current_events = event_counts.get(current_step["event_name"], 0)
+
+    # 4. Check if ready to progress
+    if current_step_index >= len(_FUNNEL_LADDER) - 1:
+        return {
+            "campaign_id": campaign_id,
+            "current_step": current_step["step"],
+            "current_events": current_events,
+            "next_step": None,
+            "action": "NONE",
+            "reason": "Already at the top of the funnel ladder (PURCHASE)",
+            "funnel_status": funnel_status,
+        }
+
+    if current_events < current_step["min_events"]:
+        return {
+            "campaign_id": campaign_id,
+            "current_step": current_step["step"],
+            "current_events": current_events,
+            "events_needed": current_step["min_events"],
+            "next_step": _FUNNEL_LADDER[current_step_index + 1]["step"],
+            "action": "WAIT",
+            "reason": (
+                f"Need {current_step['min_events']} {current_step['step']} events "
+                f"but only have {current_events} — keep running"
+            ),
+            "funnel_status": funnel_status,
+        }
+
+    # 5. Ready to progress! Get pixel ID
+    next_step = _FUNNEL_LADDER[current_step_index + 1]
+
+    pixel_response = await _api_get(
+        f"act_{account_id}/adspixels",
+        {"fields": "id,name"},
+    )
+    pixels = pixel_response.get("data", [])
+    if not pixels:
+        return {
+            "campaign_id": campaign_id,
+            "action": "ERROR",
+            "reason": "No Meta Pixel found — cannot set up conversion optimization",
+        }
+    pixel_id = pixels[0]["id"]
+
+    # 6. Create new ad set at next funnel step
+    import json
+
+    # Build promoted_object for conversion events
+    promoted_object: dict[str, Any] = {"pixel_id": pixel_id}
+    if next_step.get("event_type"):
+        promoted_object["custom_event_type"] = next_step["event_type"]
+
+    # Ensure Advantage+ audience compatibility: age_max must be 65
+    targeting = current_targeting if isinstance(current_targeting, dict) else {}
+    targeting["age_max"] = 65
+
+    new_adset_name = f"[FUNNEL] {next_step['step']} — {product_name}"
+
+    # Attribution spec must be set at creation
+    attribution_spec = json.dumps([{
+        "event_type": "CLICK_THROUGH",
+        "window_days": 7,
+    }, {
+        "event_type": "VIEW_THROUGH",
+        "window_days": 1,
+    }])
+
+    try:
+        new_adset = await _api_post(
+            f"act_{account_id}/adsets",
+            {
+                "campaign_id": campaign_id,
+                "name": new_adset_name,
+                "status": "PAUSED",
+                "daily_budget": current_budget,
+                "billing_event": "IMPRESSIONS",
+                "optimization_goal": next_step["optimization_goal"],
+                "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
+                "promoted_object": json.dumps(promoted_object),
+                "targeting": json.dumps(targeting),
+                "attribution_spec": attribution_spec,
+            },
+        )
+        new_adset_id = new_adset.get("id", "")
+    except Exception as e:
+        return {
+            "campaign_id": campaign_id,
+            "action": "ERROR",
+            "reason": f"Failed to create new ad set: {e}",
+            "funnel_status": funnel_status,
+        }
+
+    # 7. Copy ads from old ad set to new one
+    old_ads = await _api_get(
+        f"{current_adset['id']}/ads",
+        {"fields": "name,creative{id}", "limit": "50"},
+    )
+    copied_ads = []
+    for ad in old_ads.get("data", []):
+        creative = ad.get("creative", {})
+        creative_id = creative.get("id")
+        if not creative_id:
+            continue
+        try:
+            result = await _api_post(
+                f"act_{account_id}/ads",
+                {
+                    "adset_id": new_adset_id,
+                    "name": ad.get("name", ""),
+                    "status": "PAUSED",
+                    "creative": f'{{"creative_id": "{creative_id}"}}',
+                },
+            )
+            copied_ads.append(result.get("id"))
+        except Exception:
+            pass  # Skip ads that fail to copy
+
+    # 8. Pause old ad set
+    try:
+        await _api_post(current_adset["id"], {"status": "PAUSED"})
+    except Exception:
+        pass  # Non-critical — old ad set can be paused manually
+
+    return {
+        "campaign_id": campaign_id,
+        "current_step": current_step["step"],
+        "current_events": current_events,
+        "next_step": next_step["step"],
+        "action": "PROGRESSED",
+        "new_adset_id": new_adset_id,
+        "new_adset_name": new_adset_name,
+        "old_adset_id": current_adset["id"],
+        "old_adset_name": current_adset.get("name", ""),
+        "ads_copied": len(copied_ads),
+        "budget_paise": current_budget,
+        "budget_inr": round(current_budget / 100, 2),
+        "funnel_status": funnel_status,
+        "reason": (
+            f"Progressed from {current_step['step']} ({current_events} events) "
+            f"to {next_step['step']} — new ad set created with {len(copied_ads)} ads"
+        ),
     }
