@@ -375,7 +375,11 @@ async def _render_task(reel_id: uuid.UUID) -> None:
                     )
                     r.voiceover_path = vo_path
                     r.voiceover_duration_sec = await measure_mp3_duration(vo_path)
-                    audio_src = _abs_to_upload_url(vo_path) or vo_path
+                    # Pass audio inline as a data URI so Remotion doesn't need
+                    # to fetch from the AECO backend during render (its webpack
+                    # bundle serves from its own dir, not /media).
+                    vo_bytes = Path(vo_path).read_bytes()
+                    audio_src = f"data:audio/mpeg;base64,{base64.b64encode(vo_bytes).decode('ascii')}"
                     await _append_log(
                         session,
                         r,
