@@ -32,6 +32,11 @@ from aeco.db.session import async_session_factory
 from aeco.models.reel import Reel, ReelStatus
 from aeco.tools.video.composer import render_reel
 from aeco.tools.video.publisher import create_video_ad, upload_video_to_facebook
+from aeco.tools.video.runway import (
+    RunwayError,
+    image_to_videos_batch,
+    motion_prompt_for,
+)
 from aeco.tools.video.script_writer import ReelScript, write_scripts
 
 logger = logging.getLogger(__name__)
@@ -108,6 +113,7 @@ class CreateReelRequest(BaseModel):
     brief: Optional[str] = None
     composition: str = "BeforeAfterReel"
     auto_script: bool = False  # if true, LLM-generate script from brief
+    use_runway: bool = False  # Phase 2: run each after image through Runway img2vid first
 
 
 class PublishRequest(BaseModel):
@@ -128,6 +134,7 @@ class ReelResponse(BaseModel):
     after_image_urls: List[str] = []
     mp4_url: Optional[str] = None
     duration_sec: Optional[float] = None
+    use_runway: bool = False
     fb_ad_id: Optional[str] = None
     fb_ads_manager_url: Optional[str] = None
     fb_adset_id: Optional[str] = None
@@ -159,6 +166,7 @@ def _to_response(r: Reel) -> ReelResponse:
         after_image_urls=[u for u in (_abs_to_upload_url(p) for p in (r.after_image_paths or [])) if u],
         mp4_url=_abs_to_upload_url(r.mp4_path) if r.mp4_path else None,
         duration_sec=r.duration_sec,
+        use_runway=bool(r.use_runway),
         fb_ad_id=r.fb_ad_id,
         fb_ads_manager_url=r.fb_ads_manager_url,
         fb_adset_id=r.fb_adset_id,
@@ -235,6 +243,8 @@ async def create_reel(req: CreateReelRequest):
             brief=req.brief or "",
             composition=req.composition,
             status=ReelStatus.DRAFT.value,
+            use_runway=bool(req.use_runway),
+            runway_clips={},
             progress_log=[],
         )
         session.add(reel)
@@ -248,7 +258,13 @@ async def create_reel(req: CreateReelRequest):
 
 
 async def _render_task(reel_id: uuid.UUID) -> None:
-    """Background: render the reel, update status, emit progress."""
+    """Background: render the reel, update status, emit progress.
+
+    If the reel has use_runway=True, first generate per-image motion clips
+    via Runway Gen-4 Turbo, then feed those videos (as {type: "video", src})
+    into the Remotion composition. On ANY Runway failure we fall back to
+    Ken Burns so the user still gets a reel.
+    """
     try:
         async with async_session_factory() as session:
             r = await session.get(Reel, reel_id)
@@ -256,13 +272,70 @@ async def _render_task(reel_id: uuid.UUID) -> None:
                 logger.error("reel %s vanished before render", reel_id)
                 return
             r.status = ReelStatus.RENDERING.value
-            await _append_log(session, r, "render.start", "Bundling Remotion composition")
+            await _append_log(session, r, "render.start", "Preparing reel")
 
             before_uri = _to_data_uri(Path(r.before_image_path))
-            after_uris = [_to_data_uri(Path(p)) for p in r.after_image_paths]
+            after_items: list = []
+
+            if r.use_runway:
+                await _append_log(
+                    session,
+                    r,
+                    "runway.start",
+                    f"Generating {len(r.after_image_paths)} motion clips via Runway Gen-4 Turbo…",
+                )
+                prompts = [motion_prompt_for(None)] * len(r.after_image_paths)
+                try:
+                    results = await image_to_videos_batch(
+                        r.after_image_paths,
+                        prompts,
+                        duration=5,
+                        ratio="720:1280",
+                        concurrency=3,
+                    )
+                except RunwayError as e:
+                    await _append_log(
+                        session, r, "runway.failed", f"{e} — falling back to Ken Burns"
+                    )
+                    results = [None] * len(r.after_image_paths)
+                except Exception as e:  # noqa: BLE001
+                    await _append_log(
+                        session, r, "runway.failed", f"Unexpected error: {e} — falling back"
+                    )
+                    results = [None] * len(r.after_image_paths)
+
+                clips_map: dict[str, str] = {}
+                for original, mp4 in zip(r.after_image_paths, results):
+                    if mp4:
+                        clips_map[original] = mp4
+                        # URL served via /media/reels/runway/*
+                        url = _abs_to_upload_url(mp4)
+                        after_items.append(
+                            {"type": "video", "src": url or mp4}
+                        )
+                    else:
+                        # Fallback to still image for that slot
+                        after_items.append(
+                            {"type": "image", "src": _to_data_uri(Path(original))}
+                        )
+                r.runway_clips = clips_map
+                await _append_log(
+                    session,
+                    r,
+                    "runway.done",
+                    f"Got {sum(1 for v in results if v)}/{len(results)} Runway clips",
+                )
+            else:
+                # Plain Ken Burns on stills
+                after_items = [
+                    {"type": "image", "src": _to_data_uri(Path(p))}
+                    for p in r.after_image_paths
+                ]
+
+            await _append_log(session, r, "remotion.start", "Bundling Remotion composition")
             props = {
                 "beforeImage": before_uri,
-                "afterImages": after_uris,
+                "afterImages": after_items,
                 "headline": r.headline,
                 "subheadline": r.subheadline,
                 "ctaText": r.cta_text,

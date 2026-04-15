@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Film, Plus, Loader2, Rocket, ExternalLink, AlertCircle } from 'lucide-react';
+import { Film, Plus, Loader2, Rocket, ExternalLink, AlertCircle, Wand2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Dialog } from '../components/ui/Dialog';
@@ -133,11 +133,18 @@ function ReelCard({ reel }: { reel: Reel }) {
           </span>
         </div>
 
-        {reel.duration_sec != null && (
-          <div className="absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-mono text-gray-200">
-            {reel.duration_sec.toFixed(0)}s
-          </div>
-        )}
+        <div className="absolute right-2 top-2 flex items-center gap-1">
+          {reel.use_runway && (
+            <span className="flex items-center gap-0.5 rounded bg-purple-500/90 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+              <Wand2 size={9} /> Runway
+            </span>
+          )}
+          {reel.duration_sec != null && (
+            <div className="rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-mono text-gray-200">
+              {reel.duration_sec.toFixed(0)}s
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Meta */}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, X, Loader2, Sparkles } from 'lucide-react';
+import { Upload, X, Loader2, Sparkles, Wand2 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useCreateReel, useUploadImage } from '../../api/reels';
 import { cn } from '../../lib/utils';
@@ -29,6 +29,7 @@ export function NewReelForm({ onClose, onCreated }: Props) {
   const [brand, setBrand] = useState('headshot-generators.com');
   const [brief, setBrief] = useState('');
   const [autoScript, setAutoScript] = useState(false);
+  const [useRunway, setUseRunway] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const upload = async (file: File): Promise<UploadedImage | null> => {
@@ -79,6 +80,7 @@ export function NewReelForm({ onClose, onCreated }: Props) {
         brand,
         brief: brief || undefined,
         auto_script: autoScript && !!brief,
+        use_runway: useRunway,
       });
       onCreated?.(reel.id);
       onClose();
@@ -168,21 +170,38 @@ export function NewReelForm({ onClose, onCreated }: Props) {
         />
       </Field>
 
-      <label
-        className={cn(
-          'flex cursor-pointer items-center gap-2 text-sm text-gray-300',
-          !brief && 'opacity-50',
-        )}
-      >
-        <input
-          type="checkbox"
-          checked={autoScript}
-          disabled={!brief}
-          onChange={(e) => setAutoScript(e.target.checked)}
-        />
-        <Sparkles size={14} className="text-accent" />
-        Auto-generate script from brief (Claude)
-      </label>
+      <div className="space-y-2">
+        <label
+          className={cn(
+            'flex cursor-pointer items-center gap-2 text-sm text-gray-300',
+            !brief && 'opacity-50',
+          )}
+        >
+          <input
+            type="checkbox"
+            checked={autoScript}
+            disabled={!brief}
+            onChange={(e) => setAutoScript(e.target.checked)}
+          />
+          <Sparkles size={14} className="text-accent" />
+          Auto-generate script from brief (Claude)
+        </label>
+        <label className="flex cursor-pointer items-start gap-2 text-sm text-gray-300">
+          <input
+            type="checkbox"
+            checked={useRunway}
+            onChange={(e) => setUseRunway(e.target.checked)}
+            className="mt-0.5"
+          />
+          <Wand2 size={14} className="mt-0.5 shrink-0 text-accent" />
+          <span>
+            Animate after-headshots with Runway Gen-4 Turbo
+            <span className="ml-1 text-xs text-gray-500">
+              (adds ~60s + ~$1.20 per reel; falls back to Ken&nbsp;Burns if the API fails)
+            </span>
+          </span>
+        </label>
+      </div>
 
       {error && <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</div>}
 

@@ -4,6 +4,7 @@ import {
   AbsoluteFill,
   Audio,
   Img,
+  OffthreadVideo,
   Sequence,
   interpolate,
   spring,
@@ -13,6 +14,17 @@ import {
 } from "remotion";
 import { loadFont } from "@remotion/google-fonts/Inter";
 
+/** An "after" clip can be either a still image (Ken Burns'd) or a short mp4
+ * (e.g. from Runway). Schema accepts both shapes:
+ *   { type: "image", src: "data:..." }  — Phase 1 default
+ *   { type: "video", src: "http://..." } — Phase 2 (Runway img2vid)
+ * For backward compat, a plain string is treated as an image.
+ */
+const afterItemSchema = z.union([
+  z.string(),
+  z.object({ type: z.enum(["image", "video"]), src: z.string(), style: z.string().optional() }),
+]);
+
 const { fontFamily } = loadFont();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -20,7 +32,7 @@ const { fontFamily } = loadFont();
 // ─────────────────────────────────────────────────────────────────────────────
 export const beforeAfterSchema = z.object({
   beforeImage: z.string(), // URL or staticFile("...") path
-  afterImages: z.array(z.string()).min(3).max(6),
+  afterImages: z.array(afterItemSchema).min(3).max(6),
   headline: z.string(), // "8 headshots in 2 minutes"
   subheadline: z.string(), // "$19 · Money-back guarantee"
   ctaText: z.string().default("Link in bio"),
@@ -84,6 +96,32 @@ const KenBurns: React.FC<{ src: string; direction?: "in" | "out"; from?: number;
       <Img src={src} style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${scale})` }} />
     </AbsoluteFill>
   );
+};
+
+// Video-clip variant — cover-fills the 9:16 canvas.
+const VideoClip: React.FC<{ src: string }> = ({ src }) => (
+  <AbsoluteFill style={{ backgroundColor: COLORS.bg }}>
+    <OffthreadVideo
+      src={src}
+      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+      muted
+    />
+  </AbsoluteFill>
+);
+
+// Dispatch: render an after-clip either as Ken-Burns-still or live video.
+type AfterItem = string | { type: "image" | "video"; src: string; style?: string };
+const AfterClip: React.FC<{ item: AfterItem; kenBurnsDirection: "in" | "out" }> = ({
+  item,
+  kenBurnsDirection,
+}) => {
+  if (typeof item === "string") {
+    return <KenBurns src={item} direction={kenBurnsDirection} from={1.02} to={1.1} />;
+  }
+  if (item.type === "video") {
+    return <VideoClip src={item.src} />;
+  }
+  return <KenBurns src={item.src} direction={kenBurnsDirection} from={1.02} to={1.1} />;
 };
 
 // Fade in/out helper
@@ -230,14 +268,17 @@ export const BeforeAfterReel: React.FC<BeforeAfterProps> = ({
         </FadeIn>
       </Sequence>
 
-      {/* ── REVEAL: after images swap in succession, each with a style label ── */}
-      {afterImages.slice(0, afterCount).map((src, i) => {
+      {/* ── REVEAL: after images/videos swap in succession, each with a style label ── */}
+      {afterImages.slice(0, afterCount).map((item, i) => {
         const from = revealStart + i * afterClipLen;
         const isFirst = i === 0;
+        const direction: "in" | "out" = i % 2 === 0 ? "in" : "out";
+        // Stable key regardless of whether item is string or object
+        const key = typeof item === "string" ? item + i : item.src + i;
         return (
-          <Sequence key={src + i} from={from} durationInFrames={afterClipLen}>
+          <Sequence key={key} from={from} durationInFrames={afterClipLen}>
             <FadeIn duration={afterClipLen} fadeIn={6} fadeOut={6}>
-              <KenBurns src={src} direction={i % 2 === 0 ? "in" : "out"} from={1.02} to={1.1} />
+              <AfterClip item={item} kenBurnsDirection={direction} />
               <AbsoluteFill
                 style={{
                   background: "linear-gradient(0deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 35%)",

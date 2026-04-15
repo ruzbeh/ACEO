@@ -21,6 +21,7 @@ export interface Reel {
   after_image_urls: string[];
   mp4_url: string | null;
   duration_sec: number | null;
+  use_runway: boolean;
   fb_ad_id: string | null;
   fb_ads_manager_url: string | null;
   fb_adset_id: string | null;
@@ -47,6 +48,7 @@ export interface CreateReelRequest {
   brief?: string;
   composition?: string;
   auto_script?: boolean;
+  use_runway?: boolean;
 }
 
 export interface PublishRequest {

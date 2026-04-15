@@ -49,6 +49,11 @@ class Reel(Base):
 
     composition: Mapped[str] = mapped_column(String(100), default="BeforeAfterReel")
 
+    # Phase 2: Runway image-to-video motion on the after headshots
+    use_runway: Mapped[bool] = mapped_column(default=False)
+    # {image_path: mp4_path} for after-image → Runway clip. Populated on render.
+    runway_clips: Mapped[dict] = mapped_column(JSON, default=dict)
+
     # Output
     mp4_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     duration_sec: Mapped[Optional[float]] = mapped_column(default=None, nullable=True)

@@ -11,6 +11,13 @@ Phase 2: image-to-video (Runway/Luma/Veo) + voiceover (ElevenLabs).
 from aeco.tools.video.composer import render_reel, RenderedReel
 from aeco.tools.video.script_writer import write_scripts, ReelScript
 from aeco.tools.video.publisher import upload_video_to_facebook, create_video_ad
+from aeco.tools.video.runway import (
+    image_to_video,
+    image_to_videos_batch,
+    motion_prompt_for,
+    RunwayError,
+    STYLE_MOTION_PROMPTS,
+)
 
 __all__ = [
     "render_reel",
@@ -19,4 +26,9 @@ __all__ = [
     "ReelScript",
     "upload_video_to_facebook",
     "create_video_ad",
+    "image_to_video",
+    "image_to_videos_batch",
+    "motion_prompt_for",
+    "RunwayError",
+    "STYLE_MOTION_PROMPTS",
 ]
