@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, X, Loader2, Sparkles, Wand2 } from 'lucide-react';
+import { Upload, X, Loader2, Sparkles, Wand2, Mic } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useCreateReel, useUploadImage } from '../../api/reels';
 import { cn } from '../../lib/utils';
@@ -30,6 +30,11 @@ export function NewReelForm({ onClose, onCreated }: Props) {
   const [brief, setBrief] = useState('');
   const [autoScript, setAutoScript] = useState(false);
   const [useRunway, setUseRunway] = useState(false);
+  const [useVoiceover, setUseVoiceover] = useState(false);
+  const [voiceoverText, setVoiceoverText] = useState(
+    "Your LinkedIn photo is the first thing recruiters see. Upload a selfie to Headshot AI and get 8 studio-quality headshots in two minutes. All for just nineteen dollars. Try it free — money-back guarantee.",
+  );
+  const [voiceoverVoice, setVoiceoverVoice] = useState('narrator');
   const [error, setError] = useState<string | null>(null);
 
   const upload = async (file: File): Promise<UploadedImage | null> => {
@@ -81,6 +86,9 @@ export function NewReelForm({ onClose, onCreated }: Props) {
         brief: brief || undefined,
         auto_script: autoScript && !!brief,
         use_runway: useRunway,
+        use_voiceover: useVoiceover,
+        voiceover_text: useVoiceover ? voiceoverText : undefined,
+        voiceover_voice: useVoiceover ? voiceoverVoice : undefined,
       });
       onCreated?.(reel.id);
       onClose();
@@ -201,6 +209,52 @@ export function NewReelForm({ onClose, onCreated }: Props) {
             </span>
           </span>
         </label>
+
+        <label className="flex cursor-pointer items-start gap-2 text-sm text-gray-300">
+          <input
+            type="checkbox"
+            checked={useVoiceover}
+            onChange={(e) => setUseVoiceover(e.target.checked)}
+            className="mt-0.5"
+          />
+          <Mic size={14} className="mt-0.5 shrink-0 text-accent" />
+          <span>
+            Add ElevenLabs voiceover narration
+            <span className="ml-1 text-xs text-gray-500">
+              (~$0.05 per reel; renders silent if TTS fails)
+            </span>
+          </span>
+        </label>
+
+        {useVoiceover && (
+          <div className="ml-6 space-y-2 rounded-lg border border-border bg-surface-overlay p-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-400">Voice</label>
+              <select
+                value={voiceoverVoice}
+                onChange={(e) => setVoiceoverVoice(e.target.value)}
+                className={inputCls}
+              >
+                <option value="narrator">Sarah — warm, friendly female (recommended)</option>
+                <option value="female_clear">Rachel — clear, natural female</option>
+                <option value="male_pro">Antoni — professional male</option>
+                <option value="male_deep">Drew — deep, confident male</option>
+                <option value="male_calm">Arnold — calm, authoritative male</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-400">
+                Script <span className="text-gray-500">({voiceoverText.length} chars · aim for &lt;300)</span>
+              </label>
+              <textarea
+                rows={3}
+                value={voiceoverText}
+                onChange={(e) => setVoiceoverText(e.target.value)}
+                className={cn(inputCls, 'resize-none font-mono text-xs')}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {error && <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</div>}

@@ -54,6 +54,13 @@ class Reel(Base):
     # {image_path: mp4_path} for after-image → Runway clip. Populated on render.
     runway_clips: Mapped[dict] = mapped_column(JSON, default=dict)
 
+    # Phase 3: ElevenLabs voiceover narration
+    use_voiceover: Mapped[bool] = mapped_column(default=False)
+    voiceover_text: Mapped[str] = mapped_column(Text, default="")
+    voiceover_voice: Mapped[str] = mapped_column(String(100), default="narrator")
+    voiceover_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    voiceover_duration_sec: Mapped[Optional[float]] = mapped_column(default=None, nullable=True)
+
     # Output
     mp4_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     duration_sec: Mapped[Optional[float]] = mapped_column(default=None, nullable=True)

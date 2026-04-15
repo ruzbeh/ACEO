@@ -22,6 +22,11 @@ export interface Reel {
   mp4_url: string | null;
   duration_sec: number | null;
   use_runway: boolean;
+  use_voiceover: boolean;
+  voiceover_text: string;
+  voiceover_voice: string;
+  voiceover_url: string | null;
+  voiceover_duration_sec: number | null;
   fb_ad_id: string | null;
   fb_ads_manager_url: string | null;
   fb_adset_id: string | null;
@@ -49,6 +54,9 @@ export interface CreateReelRequest {
   composition?: string;
   auto_script?: boolean;
   use_runway?: boolean;
+  use_voiceover?: boolean;
+  voiceover_text?: string;
+  voiceover_voice?: string;
 }
 
 export interface PublishRequest {

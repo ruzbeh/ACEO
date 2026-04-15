@@ -18,6 +18,13 @@ from aeco.tools.video.runway import (
     RunwayError,
     STYLE_MOTION_PROMPTS,
 )
+from aeco.tools.video.voiceover import (
+    text_to_speech,
+    measure_mp3_duration,
+    default_script,
+    ElevenLabsError,
+    VOICES,
+)
 
 __all__ = [
     "render_reel",
@@ -31,4 +38,9 @@ __all__ = [
     "motion_prompt_for",
     "RunwayError",
     "STYLE_MOTION_PROMPTS",
+    "text_to_speech",
+    "measure_mp3_duration",
+    "default_script",
+    "ElevenLabsError",
+    "VOICES",
 ]

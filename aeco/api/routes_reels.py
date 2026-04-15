@@ -38,6 +38,13 @@ from aeco.tools.video.runway import (
     motion_prompt_for,
 )
 from aeco.tools.video.script_writer import ReelScript, write_scripts
+from aeco.tools.video.voiceover import (
+    ElevenLabsError,
+    VOICES,
+    default_script as default_voiceover_script,
+    measure_mp3_duration,
+    text_to_speech,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +121,9 @@ class CreateReelRequest(BaseModel):
     composition: str = "BeforeAfterReel"
     auto_script: bool = False  # if true, LLM-generate script from brief
     use_runway: bool = False  # Phase 2: run each after image through Runway img2vid first
+    use_voiceover: bool = False  # Phase 3: add ElevenLabs narration track
+    voiceover_text: Optional[str] = None  # defaults to a curated script if blank
+    voiceover_voice: str = "narrator"  # preset name or raw ElevenLabs voice_id
 
 
 class PublishRequest(BaseModel):
@@ -135,6 +145,11 @@ class ReelResponse(BaseModel):
     mp4_url: Optional[str] = None
     duration_sec: Optional[float] = None
     use_runway: bool = False
+    use_voiceover: bool = False
+    voiceover_text: str = ""
+    voiceover_voice: str = "narrator"
+    voiceover_url: Optional[str] = None
+    voiceover_duration_sec: Optional[float] = None
     fb_ad_id: Optional[str] = None
     fb_ads_manager_url: Optional[str] = None
     fb_adset_id: Optional[str] = None
@@ -167,6 +182,11 @@ def _to_response(r: Reel) -> ReelResponse:
         mp4_url=_abs_to_upload_url(r.mp4_path) if r.mp4_path else None,
         duration_sec=r.duration_sec,
         use_runway=bool(r.use_runway),
+        use_voiceover=bool(r.use_voiceover),
+        voiceover_text=r.voiceover_text or "",
+        voiceover_voice=r.voiceover_voice or "narrator",
+        voiceover_url=_abs_to_upload_url(r.voiceover_path) if r.voiceover_path else None,
+        voiceover_duration_sec=r.voiceover_duration_sec,
         fb_ad_id=r.fb_ad_id,
         fb_ads_manager_url=r.fb_ads_manager_url,
         fb_adset_id=r.fb_adset_id,
@@ -230,6 +250,11 @@ async def create_reel(req: CreateReelRequest):
             brand=req.brand or "headshot-generators.com",
         )
 
+    vo_text = (req.voiceover_text or "").strip()
+    if req.use_voiceover and not vo_text:
+        vo_text = default_voiceover_script()
+    vo_voice = req.voiceover_voice if req.voiceover_voice in VOICES else "narrator"
+
     async with async_session_factory() as session:
         reel = Reel(
             id=uuid.uuid4(),
@@ -245,6 +270,9 @@ async def create_reel(req: CreateReelRequest):
             status=ReelStatus.DRAFT.value,
             use_runway=bool(req.use_runway),
             runway_clips={},
+            use_voiceover=bool(req.use_voiceover),
+            voiceover_text=vo_text,
+            voiceover_voice=vo_voice,
             progress_log=[],
         )
         session.add(reel)
@@ -332,6 +360,45 @@ async def _render_task(reel_id: uuid.UUID) -> None:
                     for p in r.after_image_paths
                 ]
 
+            # Phase 3: optional voiceover via ElevenLabs — graceful fallback if TTS fails
+            audio_src: Optional[str] = None
+            if r.use_voiceover and r.voiceover_text:
+                await _append_log(
+                    session,
+                    r,
+                    "voiceover.start",
+                    f"Synthesizing narration ({len(r.voiceover_text)} chars, voice={r.voiceover_voice})",
+                )
+                try:
+                    vo_path = await text_to_speech(
+                        r.voiceover_text, voice=r.voiceover_voice
+                    )
+                    r.voiceover_path = vo_path
+                    r.voiceover_duration_sec = await measure_mp3_duration(vo_path)
+                    audio_src = _abs_to_upload_url(vo_path) or vo_path
+                    await _append_log(
+                        session,
+                        r,
+                        "voiceover.done",
+                        f"Narration ready ({r.voiceover_duration_sec:.1f}s)"
+                        if r.voiceover_duration_sec
+                        else "Narration ready",
+                    )
+                except ElevenLabsError as e:
+                    await _append_log(
+                        session,
+                        r,
+                        "voiceover.failed",
+                        f"{e} — rendering silent reel",
+                    )
+                except Exception as e:  # noqa: BLE001
+                    await _append_log(
+                        session,
+                        r,
+                        "voiceover.failed",
+                        f"Unexpected VO error: {e} — rendering silent reel",
+                    )
+
             await _append_log(session, r, "remotion.start", "Bundling Remotion composition")
             props = {
                 "beforeImage": before_uri,
@@ -340,6 +407,7 @@ async def _render_task(reel_id: uuid.UUID) -> None:
                 "subheadline": r.subheadline,
                 "ctaText": r.cta_text,
                 "brand": r.brand,
+                **({"audioSrc": audio_src} if audio_src else {}),
             }
             output_path = _OUTPUT_DIR / f"{r.id}.mp4"
 

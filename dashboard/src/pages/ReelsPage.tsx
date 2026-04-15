@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Film, Plus, Loader2, Rocket, ExternalLink, AlertCircle, Wand2 } from 'lucide-react';
+import { Film, Plus, Loader2, Rocket, ExternalLink, AlertCircle, Wand2, Mic } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Dialog } from '../components/ui/Dialog';
@@ -137,6 +137,11 @@ function ReelCard({ reel }: { reel: Reel }) {
           {reel.use_runway && (
             <span className="flex items-center gap-0.5 rounded bg-purple-500/90 px-1.5 py-0.5 text-[10px] font-semibold text-white">
               <Wand2 size={9} /> Runway
+            </span>
+          )}
+          {reel.voiceover_url && (
+            <span className="flex items-center gap-0.5 rounded bg-sky-500/90 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+              <Mic size={9} /> VO
             </span>
           )}
           {reel.duration_sec != null && (
