@@ -2,6 +2,16 @@ from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Local dashboard dev (Vite). Used when CORS_ORIGINS is unset or empty in .env (empty overrides the default below).
+DEV_CORS_ORIGINS = (
+    "http://localhost:5173,http://127.0.0.1:5173,"
+    "http://localhost:5174,http://127.0.0.1:5174,"
+    "http://localhost:5175,http://127.0.0.1:5175,"
+    "http://localhost:5176,http://127.0.0.1:5176,"
+    "http://localhost:4173,http://127.0.0.1:4173,"
+    "http://localhost:8100,http://127.0.0.1:8100"
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
@@ -26,21 +36,27 @@ class Settings(BaseSettings):
     chroma_host: Optional[str] = None
     chroma_port: int = 8001
 
-    # CORS (comma-separated origins, e.g. "http://localhost:5173")
-    cors_origins: str = ""
+    # CORS (comma-separated origins). Use CORS_ORIGINS=__DISABLED__ to turn off middleware.
+    cors_origins: str = DEV_CORS_ORIGINS
 
     # Claude Code CLI
-    claude_code_binary: str = "/Users/ruzbeh.i/Library/Application Support/Claude/claude-code/2.1.78/claude.app/Contents/MacOS/claude"
-    claude_code_default_timeout: int = 300
+    claude_code_binary: str = ""  # Auto-detected at startup
+    claude_code_default_timeout: int = 900
 
     # Initiative workflow: max seconds per task so one agent can't hang the whole run
-    initiative_task_timeout_seconds: int = 600
+    initiative_task_timeout_seconds: int = 900
 
     # Facebook/Meta Ads API
     facebook_app_id: Optional[str] = None
     facebook_app_secret: Optional[str] = None
     facebook_access_token: Optional[str] = None
     facebook_ad_account_id: str = ""
+
+    # Runway ML — image-to-video generation (Phase 2 video harness)
+    runway_api_key: Optional[str] = None
+
+    # ElevenLabs — voiceover TTS (Phase 2 video harness)
+    elevenlabs_api_key: Optional[str] = None
 
     # Stripe API
     stripe_api_key: Optional[str] = None
@@ -68,3 +84,13 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def effective_cors_origins() -> str | None:
+    """Origins for CORSMiddleware, or None to skip (same-origin-only deployments)."""
+    raw = (settings.cors_origins or "").strip()
+    if raw.upper() == "__DISABLED__":
+        return None
+    if not raw:
+        return DEV_CORS_ORIGINS
+    return raw
