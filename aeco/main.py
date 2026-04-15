@@ -30,7 +30,7 @@ from aeco.api.routes_workflows import router as workflows_router
 from aeco.api.routes_workflows import set_graph
 from aeco.audit.logger import AuditLogger
 from aeco.budget.engine import BudgetEngine
-from aeco.config import settings
+from aeco.config import effective_cors_origins, settings
 from aeco.context.builder import ContextBuilder
 from aeco.logging.company_logger import init_company_logging
 from aeco.db.session import async_session_factory
@@ -294,11 +294,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS for dashboard dev server
-if settings.cors_origins:
+# CORS for dashboard dev (Vite on another port) or VITE_API_BASE direct calls
+_cors = effective_cors_origins()
+if _cors:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[o.strip() for o in settings.cors_origins.split(",")],
+        allow_origins=[o.strip() for o in _cors.split(",") if o.strip()],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -339,6 +340,15 @@ app.include_router(products_router)
 # Visual feedback (upload screenshot + describe changes)
 from aeco.api.routes_visual_feedback import router as visual_feedback_router
 app.include_router(visual_feedback_router)
+
+# Reels (video ad generation + FB publish)
+from aeco.api.routes_reels import router as reels_router
+app.include_router(reels_router)
+
+# Static mount for user-rendered reels + source images (served to the dashboard)
+from aeco.api.routes_reels import _REELS_DIR as _reels_media_dir
+_reels_media_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/media/reels", StaticFiles(directory=str(_reels_media_dir)), name="reels-media")
 
 # WebSocket for real-time events
 from aeco.api.routes_ws import router as ws_router

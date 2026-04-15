@@ -34,6 +34,7 @@ async def init_db() -> None:
     import aeco.models.approval  # noqa: F401
     import aeco.models.portfolio_cycle  # noqa: F401
     import aeco.models.campaign_product  # noqa: F401
+    import aeco.models.reel  # noqa: F401
     from aeco.memory.store import MemoryEntry  # noqa: F401
 
     from aeco.db.base import Base
