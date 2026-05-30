@@ -30,13 +30,17 @@ logger = logging.getLogger(__name__)
 
 _URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = os.environ.get("SMM_MODEL", "openai/gpt-4o-mini")
+# The compliance reviewer needs stronger instruction-following than the cheap default
+# (gpt-4o-mini over-holds factual education / cited trials despite explicit carve-outs).
+REVIEWER_MODEL = os.environ.get("REVIEWER_MODEL", "openai/gpt-4o")
 
 
 def _key() -> Optional[str]:
     return os.environ.get("OPENROUTER_API_KEY") or settings.openrouter_api_key
 
 
-async def _chat(messages: list, *, max_tokens: int = 700, temperature: float = 0.6) -> str:
+async def _chat(messages: list, *, max_tokens: int = 700, temperature: float = 0.6,
+                model: Optional[str] = None) -> str:
     key = _key()
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY not set")
@@ -44,7 +48,7 @@ async def _chat(messages: list, *, max_tokens: int = 700, temperature: float = 0
         r = await c.post(
             _URL,
             headers={"Authorization": f"Bearer {key}"},
-            json={"model": DEFAULT_MODEL, "messages": messages,
+            json={"model": model or DEFAULT_MODEL, "messages": messages,
                   "max_tokens": max_tokens, "temperature": temperature},
         )
     if r.status_code != 200:
@@ -88,16 +92,30 @@ async def copywriter(topic_id: str, script: str) -> dict:
 
 async def reviewer(topic_id: str, script: str) -> dict:
     sys = (
-        "You are the compliance editor for an EDUCATIONAL science Short. The channel "
-        "summarizes published research on supplements/health, framed as information, with an "
-        "on-screen 'not medical advice' disclaimer. Be PERMISSIVE with properly-hedged content "
-        "— your job is to catch only clear violations.\n"
-        "PASS when the script frames claims as research ('studies suggest', 'may', 'linked to', "
-        "'in animals'), includes a caveat/'the catch', or cites a source. Hedged correlational "
-        "science (e.g. 'linked to fewer heart deaths — it's a link, not proof') is FINE and should PASS.\n"
-        "HOLD only for explicit violations: specific dosage instructions, claims it CURES/TREATS/"
-        "PREVENTS a disease, 'guaranteed' results, telling viewers to stop prescribed meds, or "
-        "clearly fabricated specifics. When unsure, PASS. Return STRICT JSON only."
+        "You are the compliance editor for an EDUCATIONAL science Short that summarizes published "
+        "research on nutrition/supplements/health. An on-screen 'not medical advice' disclaimer is "
+        "always present. Your ONLY job is to catch content that could trigger a platform "
+        "medical-MISINFORMATION strike. Default hard to PASS.\n\n"
+        "PASS — these are FINE, do NOT hold (common false positives):\n"
+        "- Describing what a nutrient or its DEFICIENCY does in the body (e.g. 'B12 deficiency can "
+        "cause nerve damage', 'low iron drains energy for years'). This is education, not a cure claim.\n"
+        "- Reporting a real study/trial result (e.g. 'a major trial found high-dose EPA cut cardiac "
+        "events', 'fatigue dropped in trials'). Citing research is the entire point of the channel.\n"
+        "- Suggesting a standard diagnostic test ('ask for a ferritin test', 'get B12 checked').\n"
+        "- Well-established effects stated plainly ('caffeine reliably boosts endurance') when backed "
+        "by strong evidence; mentioning a trial's dose ('high-dose EPA') is NOT a dosing instruction.\n"
+        "- Hedged/correlational framing ('linked to', 'may', 'studies suggest', 'often') and general "
+        "lifestyle guidance ('eat more protein', 'lift weights').\n\n"
+        "HOLD only for a CLEAR, SPECIFIC violation:\n"
+        "- A supplement DOSING REGIMEN given as an instruction to the viewer (e.g. 'take 5000 mg of X "
+        "every morning'). Naming a trial's dose is NOT this.\n"
+        "- Telling viewers to START or STOP a prescription medication.\n"
+        "- A miracle / GUARANTEED cure or disease-prevention claim ('cures cancer', 'guaranteed to "
+        "prevent heart disease').\n"
+        "- Fabricated or invented study citations / fake statistics, or dangerous instructions.\n\n"
+        "Do NOT hold merely because a statement 'implies' or 'suggests' something, or could be "
+        "misread — hold only on an explicit, concrete item from the HOLD list. When unsure, PASS. "
+        "Return STRICT JSON only."
     )
     user = (
         f"Script (topic {topic_id}):\n{script}\n\n"
@@ -106,7 +124,7 @@ async def reviewer(topic_id: str, script: str) -> dict:
     try:
         data = _json(await _chat(
             [{"role": "system", "content": sys}, {"role": "user", "content": user}],
-            temperature=0.2,
+            temperature=0.2, model=REVIEWER_MODEL,
         ))
     except Exception as e:  # noqa: BLE001 — transient error must not silently block
         logger.warning("reviewer failed (%s) — defaulting to pass", e)
