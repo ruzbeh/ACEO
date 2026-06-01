@@ -289,6 +289,57 @@ TOPIC_POOL: list[dict] = [
         {"text": "More of it tracks with **less** arterial calcium.", "source": "Rotterdam Study"},
         {"text": "Mostly observational so far — but **intriguing**."},
         {"text": "The traffic cop your calcium **needs**."}]},
+    # Added 2026-05-31: demand-driven everyday topics mined from YouTube's Research
+    # tab ("benefits of" search demand). Each backed by a real citation; chosen for
+    # broad search appeal over niche novelty.
+    {"id": "walking-glucose", "segments": [
+        {"text": "A 2-minute walk after dinner beats a **workout** for one thing."},
+        {"text": "It flattens the **blood-sugar spike** that follows every meal."},
+        {"text": "Even 2–5 minutes of strolling after eating **lowered glucose**.", "source": "Sports Medicine, 2022"},
+        {"text": "It won't replace exercise — but the **timing** is the trick."},
+        {"text": "Don't sit after meals. **Walk** them off."}]},
+    {"id": "hydration-brain", "segments": [
+        {"text": "Foggy and tired by noon? You might just be **dehydrated**."},
+        {"text": "Losing barely **1–2%** of your water hits the brain first."},
+        {"text": "Mild dehydration measurably **worsened focus and mood**.", "source": "J. Nutrition, 2012"},
+        {"text": "More isn't better — you only need to cover the **deficit**."},
+        {"text": "Before the next coffee, try a glass of **water**."}]},
+    {"id": "coffee-longevity", "segments": [
+        {"text": "The habit you feel guilty about may help you **live longer**."},
+        {"text": "**Coffee** — and the data is bigger than you'd think."},
+        {"text": "In huge studies, 2–3 cups a day tracked with **lower mortality**.", "source": "Annals of Internal Medicine, 2022"},
+        {"text": "It's a link, not proof — and **sugar** undoes the upside."},
+        {"text": "Black coffee, in reason — the science is **on your side**."}]},
+    {"id": "morning-light-sleep", "segments": [
+        {"text": "The best **sleep** trick happens the moment you wake up."},
+        {"text": "**Morning sunlight** sets the clock that runs your whole day."},
+        {"text": "Early outdoor light **anchored circadian rhythm** and sleep.", "source": "Current Biology, 2013"},
+        {"text": "Through a window is weaker — **outdoors** beats glass."},
+        {"text": "Ten minutes of morning light. **Free**, and it works."}]},
+    {"id": "strength-longevity", "segments": [
+        {"text": "Lifting weights isn't about looking good — it's about **living longer**."},
+        {"text": "Muscle is an organ that **defends** your whole body."},
+        {"text": "Regular strength training tracked with **lower death rates**.", "source": "Br. J. Sports Medicine, 2022"},
+        {"text": "You don't need a gym — **bodyweight** counts too."},
+        {"text": "Two short sessions a week. Your future self **wins**."}]},
+    {"id": "garlic-bp", "segments": [
+        {"text": "One kitchen staple nudges **blood pressure** down."},
+        {"text": "**Garlic** — and the effect isn't just folklore."},
+        {"text": "Concentrated garlic modestly **lowered blood pressure** in trials.", "source": "meta-analyses"},
+        {"text": "It's a small dip — not a replacement for **medication**."},
+        {"text": "A real, food-first **edge** for your heart."}]},
+    {"id": "ginger-nausea", "segments": [
+        {"text": "Before you reach for a pill, the **spice rack** has an answer."},
+        {"text": "**Ginger** has calmed queasy stomachs for centuries."},
+        {"text": "Reviews found it genuinely **eased nausea** — even in pregnancy.", "source": "Cochrane reviews"},
+        {"text": "Great for mild queasiness — not for **serious** illness."},
+        {"text": "Fresh ginger or tea. A remedy that actually **holds up**."}]},
+    {"id": "breathing-stress", "segments": [
+        {"text": "You can flip your body out of **stress** in 90 seconds."},
+        {"text": "The tool is your **breath** — slow it, and the alarm quiets."},
+        {"text": "Five minutes of slow breathing **cut stress and anxiety**.", "source": "Cell Reports Medicine, 2023"},
+        {"text": "One catch: the **long exhale** is what does the work."},
+        {"text": "Inhale, then exhale **longer**. That's the whole hack."}]},
 ]
 
 
