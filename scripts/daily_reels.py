@@ -340,6 +340,58 @@ TOPIC_POOL: list[dict] = [
         {"text": "Five minutes of slow breathing **cut stress and anxiety**.", "source": "Cell Reports Medicine, 2023"},
         {"text": "One catch: the **long exhale** is what does the work."},
         {"text": "Inhale, then exhale **longer**. That's the whole hack."}]},
+    # Added 2026-05-31 (batch 2): demand-gap topics validated against 2026 trend
+    # data — cholesterol, gut/bloating, weight ("why can't I lose weight"), eyes,
+    # brain-food. Each backed by a real citation; compliance-sensitive ones kept
+    # honestly hedged (ACV "no diabetes treatment", peppermint "ask your doctor").
+    {"id": "oats-cholesterol", "segments": [
+        {"text": "A breakfast you already know quietly lowers **cholesterol**."},
+        {"text": "**Oats** are rich in a sticky fiber called **beta-glucan**."},
+        {"text": "It binds cholesterol in your gut — and trials show **LDL drops**.", "source": "meta-analyses"},
+        {"text": "It takes a real bowl daily — a sprinkle **won't** cut it."},
+        {"text": "Oats most mornings. Cheapest **heart** insurance there is."}]},
+    {"id": "fermented-gut", "segments": [
+        {"text": "The fastest way to a healthier **gut** isn't a pill."},
+        {"text": "It's **fermented food** — yogurt, kimchi, kefir, sauerkraut."},
+        {"text": "Eating more of it **raised microbe diversity** and cut inflammation.", "source": "Cell, 2021"},
+        {"text": "Fermented, not just pickled — the **live cultures** matter."},
+        {"text": "One fermented food a day. Your **microbiome** notices."}]},
+    {"id": "peppermint-ibs", "segments": [
+        {"text": "For a bloated, cranky gut, one oil keeps **winning** in trials."},
+        {"text": "**Peppermint oil** relaxes the muscle lining your gut."},
+        {"text": "In studies it eased **IBS pain and bloating** better than placebo.", "source": "meta-analyses"},
+        {"text": "Enteric-coated capsules — not just **tea** — for the real effect."},
+        {"text": "Persistent gut trouble? Worth asking your **doctor** about."}]},
+    {"id": "protein-satiety", "segments": [
+        {"text": "Want fewer **cravings** by 4pm? Fix breakfast."},
+        {"text": "A **high-protein** morning keeps hunger hormones quiet."},
+        {"text": "People who front-loaded protein **ate less** later in the day.", "source": "satiety trials"},
+        {"text": "It's about **staying full** — not a magic fat-burner."},
+        {"text": "Eggs, yogurt, or tofu first. Crush the **afternoon** snack urge."}]},
+    {"id": "sleep-weight", "segments": [
+        {"text": "Skimping on **sleep** can quietly pack on weight."},
+        {"text": "Short nights spike **hunger hormones** and crush willpower."},
+        {"text": "Sleep-deprived people **ate more** and lost less fat in studies.", "source": "clinical trials"},
+        {"text": "Sleep won't melt fat — but too little **works against** you."},
+        {"text": "Guard your 7 hours. It's part of the **diet**."}]},
+    {"id": "acv-glucose", "segments": [
+        {"text": "A spoonful of vinegar before carbs does something **real**."},
+        {"text": "**Apple cider vinegar** slows how fast sugar hits your blood."},
+        {"text": "Taken before a meal, it **blunted the glucose spike** in trials.", "source": "small trials"},
+        {"text": "The effect is **modest** — and it's no diabetes treatment."},
+        {"text": "Diluted, before a big-carb meal. Small, but **real**."}]},
+    {"id": "lutein-eyes", "segments": [
+        {"text": "Your eyes have a built-in **sunglasses** pigment — and screens drain it."},
+        {"text": "**Lutein** from leafy greens packs into your retina."},
+        {"text": "More of it tracks with **healthier aging eyes**.", "source": "AREDS2"},
+        {"text": "Biggest payoff is **long-term** — not an overnight fix."},
+        {"text": "Eat the greens, or supplement. Your **future eyes** win."}]},
+    {"id": "leafy-greens-brain", "segments": [
+        {"text": "One daily habit kept aging brains **years younger**."},
+        {"text": "It was a serving of **leafy greens** — spinach, kale, salad."},
+        {"text": "Daily greens tracked with **slower memory decline**.", "source": "Neurology, 2018"},
+        {"text": "It's a link, not a **guarantee** — but a strong one."},
+        {"text": "A salad a day. Cheap insurance for your **memory**."}]},
 ]
 
 
