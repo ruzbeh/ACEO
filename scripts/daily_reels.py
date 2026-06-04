@@ -392,6 +392,94 @@ TOPIC_POOL: list[dict] = [
         {"text": "Daily greens tracked with **slower memory decline**.", "source": "Neurology, 2018"},
         {"text": "It's a link, not a **guarantee** — but a strong one."},
         {"text": "A salad a day. Cheap insurance for your **memory**."}]},
+    # Added 2026-06-04 (batch 3): demand-gap buffer — skin/hair/joints (the
+    # explicit gaps) + high-demand everyday clusters (sleep hygiene, movement,
+    # mood, cortisol). Each cited; compliance-sensitive ones hedged (exercise-mood
+    # "never stop meds alone", magnesium-migraine "raise with your doctor").
+    {"id": "sunscreen-aging", "segments": [
+        {"text": "The #1 thing aging your **face** isn't time — it's the sun."},
+        {"text": "**UV light** breaks down collagen far faster than birthdays do."},
+        {"text": "In a trial, daily **sunscreen** visibly slowed skin aging.", "source": "Annals of Int. Medicine, 2013"},
+        {"text": "Rain or shine — UV gets through **clouds** too."},
+        {"text": "Cheapest anti-aging in the world: **SPF**, every morning."}]},
+    {"id": "retinol-wrinkles", "segments": [
+        {"text": "Dermatologists agree on **one** anti-wrinkle ingredient."},
+        {"text": "**Retinoids** — vitamin A — tell skin to make fresh collagen."},
+        {"text": "Trials show they smooth **fine lines** over months.", "source": "dermatology trials"},
+        {"text": "Start low — too much, too fast just **irritates**."},
+        {"text": "Patience and a pea-sized dab. That's the **proven** path."}]},
+    {"id": "vitamin-c-skin", "segments": [
+        {"text": "Your skin literally **can't** build collagen without this."},
+        {"text": "**Vitamin C** is the cofactor that holds collagen together."},
+        {"text": "Topical C is linked to **firmer, brighter** skin.", "source": "dermatology research"},
+        {"text": "It oxidizes fast — a **dark bottle** matters."},
+        {"text": "Eat it and apply it. Your **collagen** depends on it."}]},
+    {"id": "rosemary-hair", "segments": [
+        {"text": "A kitchen herb went head-to-head with a **hair-loss** drug."},
+        {"text": "**Rosemary oil** — massaged into the scalp."},
+        {"text": "In one trial it matched **minoxidil** for regrowth.", "source": "RCT, 2015"},
+        {"text": "One small study — promising, not **proven**."},
+        {"text": "Cheap, low-risk. Worth a **6-month** test."}]},
+    {"id": "collagen-joints", "segments": [
+        {"text": "Achy knees? Your **cartilage** may be asking for a building block."},
+        {"text": "**Collagen peptides** give joints the raw material to repair."},
+        {"text": "In athletes, they eased **joint pain** in trials.", "source": "trials"},
+        {"text": "It's slow — think **months**, not days."},
+        {"text": "A daily scoop. Quiet support for your **joints**."}]},
+    {"id": "magnesium-migraine", "segments": [
+        {"text": "If migraines hit often, you may be low on one **mineral**."},
+        {"text": "**Magnesium** calms the nerve signals behind an attack."},
+        {"text": "Neurologists rate it a real **migraine preventer**.", "source": "neurology guidelines"},
+        {"text": "It's prevention, not a **rescue** for an attack in progress."},
+        {"text": "Cheap and worth raising with your **doctor**."}]},
+    {"id": "blue-light-sleep", "segments": [
+        {"text": "Your phone may be quietly **stealing** your sleep."},
+        {"text": "Screen **blue light** tells your brain it's still daytime."},
+        {"text": "Reading on a screen at night **delayed melatonin**.", "source": "PNAS, 2015"},
+        {"text": "It's the **timing** and brightness — not the phone itself."},
+        {"text": "Dim the screens an hour before **bed**."}]},
+    {"id": "alcohol-sleep", "segments": [
+        {"text": "A nightcap helps you fall asleep — then **wrecks** it."},
+        {"text": "**Alcohol** knocks you out but blocks deep **REM** sleep."},
+        {"text": "Studies show it **fragments** the second half of the night.", "source": "sleep research"},
+        {"text": "One early drink hurts less than one at **bedtime**."},
+        {"text": "Want real rest? Keep booze **off** the nightstand."}]},
+    {"id": "berries-brain", "segments": [
+        {"text": "One handful of fruit is tied to a **younger** brain."},
+        {"text": "**Berries** are loaded with brain-protecting **flavonoids**."},
+        {"text": "Higher berry intake tracked with **slower memory decline**.", "source": "Annals of Neurology, 2012"},
+        {"text": "It's a link, not a **cure** — but an easy one."},
+        {"text": "A daily handful of **blueberries**. Cheap brain insurance."}]},
+    {"id": "exercise-mood", "segments": [
+        {"text": "One free thing rivals **antidepressants** for a low mood."},
+        {"text": "**Exercise** — and the effect is bigger than people expect."},
+        {"text": "For mild depression it **matched medication** in trials.", "source": "meta-analyses"},
+        {"text": "Not a replacement for care — never stop **meds** alone."},
+        {"text": "Even a brisk **walk** counts. Start small."}]},
+    {"id": "nature-cortisol", "segments": [
+        {"text": "Twenty minutes outside measurably lowers **stress**."},
+        {"text": "Time in **green space** dials down your cortisol."},
+        {"text": "Studies clocked a real **cortisol drop** outdoors.", "source": "field studies"},
+        {"text": "A park beats a **treadmill** for this — nature matters."},
+        {"text": "Stressed? Take it **outside**."}]},
+    {"id": "sitting-mortality", "segments": [
+        {"text": "Sitting all day quietly **shortens** your life."},
+        {"text": "Long, unbroken sitting strains your **metabolism**."},
+        {"text": "More daily sitting tracked with **higher mortality**.", "source": "Annals of Int. Medicine, 2017"},
+        {"text": "It's the **unbroken** hours — breaks blunt the harm."},
+        {"text": "Stand and move every **30 minutes**."}]},
+    {"id": "steps-longevity", "segments": [
+        {"text": "You don't need **10,000** steps to live longer."},
+        {"text": "The longevity payoff kicks in **far earlier** than that."},
+        {"text": "Around **7,000** steps tracked with much lower mortality.", "source": "Lancet, 2022"},
+        {"text": "More helps — but the **biggest** jump is off the couch."},
+        {"text": "Aim for 7k. The first steps **matter** most."}]},
+    {"id": "sleep-immune", "segments": [
+        {"text": "Skimp on **sleep** and you catch every cold going around."},
+        {"text": "Deep sleep is when your **immune system** rearms."},
+        {"text": "Short sleepers were **far likelier** to get sick.", "source": "Sleep, 2015"},
+        {"text": "One bad night won't doom you — it's the **pattern**."},
+        {"text": "Guard your 7 hours. It's **immune** armor."}]},
 ]
 
 
@@ -460,18 +548,23 @@ def _save_seen(seen: list[str]) -> None:
 
 
 def _pick(count: int) -> list[dict]:
-    """Pick `count` least-recently-used topics (recycle oldest when pool exhausted)."""
-    seen = _load_seen()
+    """Return up to `count` unseen topics, in pool order.
+
+    NEVER recycles an already-seen topic — re-uploading a published reel puts a
+    duplicate on the channel (the old recycle-fallback silently re-posted topics,
+    e.g. creatine-brain went up twice). If the fresh pool is short we publish
+    fewer and log loudly, so the gap is visible and prompts adding new TOPIC_POOL
+    entries instead of being papered over with reruns.
+    """
+    seen = set(_load_seen())
     unseen = [t for t in TOPIC_POOL if t["id"] not in seen]
-    chosen = unseen[:count]
-    if len(chosen) < count:  # pool exhausted → recycle the oldest-seen first
-        order = {tid: i for i, tid in enumerate(seen)}
-        recycled = sorted(
-            (t for t in TOPIC_POOL if t["id"] in seen),
-            key=lambda t: order.get(t["id"], 0),
+    if len(unseen) < count:
+        logger.warning(
+            "TOPIC POOL LOW: only %d fresh topic(s) left but %d requested — "
+            "publishing %d and skipping the rest. Add new topics to TOPIC_POOL.",
+            len(unseen), count, len(unseen),
         )
-        chosen += recycled[: count - len(chosen)]
-    return chosen
+    return unseen[:count]
 
 
 def _frame_uris(mp4: str, times=(1.5, 8.0)) -> list[str]:
