@@ -37,6 +37,9 @@ export const scienceNewsSchema = z.object({
   // it becomes a continuous Ken-Burns backdrop; otherwise we fall back to clean
   // motion graphics. Best-effort upstream, so this is always optional.
   heroImage: z.string().optional(),
+  // Optional serialized-story badge, e.g. "PART 1 / 8". When set, a small pill
+  // renders under the header so the reel reads as one episode of a series.
+  seriesLabel: z.string().optional(),
   musicSrc: z.string().optional(),
 });
 
@@ -452,6 +455,31 @@ const Header: React.FC<{ label: string }> = ({ label }) => {
   );
 };
 
+const SeriesBadge: React.FC<{ label: string }> = ({ label }) => {
+  const frame = useCurrentFrame();
+  const pulse = 0.5 + 0.3 * Math.sin(frame / 14);
+  return (
+    <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "center", paddingTop: 150 }}>
+      <div
+        style={{
+          fontFamily,
+          fontWeight: 800,
+          fontSize: 26,
+          letterSpacing: "0.22em",
+          color: COLORS.text,
+          background: "rgba(251,191,36,0.16)",
+          border: `1.5px solid rgba(251,191,36,${0.55 + 0.25 * pulse})`,
+          padding: "7px 22px",
+          borderRadius: 999,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 const Watermark: React.FC<{ brand: string }> = ({ brand }) => (
   <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "flex-end", padding: 44 }}>
     <div
@@ -522,6 +550,7 @@ export const ScienceNewsReel: React.FC<ScienceNewsProps> = ({
   headerLabel,
   disclaimer,
   heroImage,
+  seriesLabel,
   musicSrc,
 }) => {
   const { fps } = useVideoConfig();
@@ -553,6 +582,7 @@ export const ScienceNewsReel: React.FC<ScienceNewsProps> = ({
       ))}
       {/* Persistent overlays */}
       <Header label={headerLabel} />
+      {seriesLabel && <SeriesBadge label={seriesLabel} />}
       <Watermark brand={brand} />
       <Disclaimer text={disclaimer} />
       <ProgressBar />
