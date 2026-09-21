@@ -1,5 +1,7 @@
 # Phase 0 — Paywall Leak Closure Implementation Plan
 
+> **SHIPPED 2026-09-22.** All 8 code tasks merged as [PR #40](https://github.com/ruzbeh/headshot-studio/pull/40) (merge commit `b1ed9cf`), production deploy succeeded, and the fixes were verified against real production data. The one outstanding item is the `COUPON_CODES` environment rotation in Task 9 Step 3, which needs Vercel credentials this machine does not have.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the three live paywall bypasses on headshot-generators.com (free unlock via `?ref=FAMILY200`, clean generated images exposed through the job JSON, `$0` unlock via image feedback) without changing any paid-customer behaviour.
@@ -55,7 +57,7 @@ The results page UI already renders locked images through the watermarking route
 - Create: `lib/result-access.ts`
 - Test: `tests/test_result_access.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_result_access.ts`:
 
@@ -109,7 +111,7 @@ function main() {
 main();
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_result_access.ts
@@ -117,7 +119,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL — `Cannot find module '../lib/result-access'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `lib/result-access.ts`:
 
@@ -143,7 +145,7 @@ export function isResultIndexUnlocked(job: ResultAccessJob, index: number): bool
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_result_access.ts
@@ -151,7 +153,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: PASS, printing `result access predicate covers preview, free-preview, paid and partial-unlock cases`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/result-access.ts tests/test_result_access.ts && git commit -m "Add shared result-index unlock predicate"
@@ -167,7 +169,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/resu
 
 This task exists so the predicate has exactly one definition. Per the house rule, new call sites route through the shared handler rather than duplicating it inline.
 
-- [ ] **Step 1: Read the current block to confirm the line numbers**
+- [x] **Step 1: Read the current block to confirm the line numbers**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "isPreviewMode\|FREE_PREVIEW_COUNT\|isFreePreview\|const isUnlocked" "app/api/jobs/[jobId]/result/[index]/route.ts"
@@ -175,7 +177,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "isPrevi
 
 Expected: five lines in the 97–106 range, matching the block replaced in Step 2.
 
-- [ ] **Step 2: Replace the inline predicate with the shared one**
+- [x] **Step 2: Replace the inline predicate with the shared one**
 
 Delete these lines:
 
@@ -204,7 +206,7 @@ Add to the imports at the top of the file, beside the existing `hasOwnerOrComple
 import { isResultIndexUnlocked } from "@/lib/result-access";
 ```
 
-- [ ] **Step 3: Check for other uses of the deleted locals**
+- [x] **Step 3: Check for other uses of the deleted locals**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "isPreviewMode\|isFreePreview\|FREE_PREVIEW_COUNT" "app/api/jobs/[jobId]/result/[index]/route.ts"
@@ -212,7 +214,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "isPrevi
 
 Expected: no output. If any line still references them, replace that reference with `isUnlocked` or `isResultIndexUnlocked(job, index)` as the surrounding logic requires, then re-run until the output is empty.
 
-- [ ] **Step 4: Typecheck**
+- [x] **Step 4: Typecheck**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typecheck
@@ -220,7 +222,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typechec
 
 Expected: no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add "app/api/jobs/[jobId]/result/[index]/route.ts" && git commit -m "Route per-image endpoint through shared unlock predicate"
@@ -234,7 +236,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add "app/api
 - Modify: `app/api/jobs/[jobId]/route.ts` (the `toDisplayUrl` / `resultStyles` / `styleResults` block, L69–94)
 - Test: `tests/test_job_response_privacy.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append a second scenario to `tests/test_job_response_privacy.ts`. Insert this function above the existing `main`, and add `await unpaidPreviewOmitsCleanUrls();` as the last line inside `main` (before its closing brace):
 
@@ -280,7 +282,7 @@ async function unpaidPreviewOmitsCleanUrls() {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_job_response_privacy.ts
@@ -288,7 +290,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL on `serialized.includes("/api/blob")` being `true`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `app/api/jobs/[jobId]/route.ts`, replace the `resultStyles` and `styleResults` blocks (L74–94) with:
 
@@ -335,7 +337,7 @@ Add to the imports at the top of the file:
 import { isResultIndexUnlocked } from "@/lib/result-access";
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_job_response_privacy.ts
@@ -343,7 +345,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: PASS, printing both the original owner-response line and `unpaid preview response exposes no clean image URL`.
 
-- [ ] **Step 5: Confirm paid jobs still get direct blob URLs**
+- [x] **Step 5: Confirm paid jobs still get direct blob URLs**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_owner_token_idor_fix.ts && npm run typecheck
@@ -351,7 +353,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: PASS and no type errors. A paid job's `resultStyles[i].url` must still be a `/api/blob?url=…` path — the results page uses it directly for unlocked images and a regression here would break every paid gallery.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add "app/api/jobs/[jobId]/route.ts" tests/test_job_response_privacy.ts && git commit -m "Serve locked result indexes through the watermark route in job JSON"
@@ -366,7 +368,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add "app/api
 
 The thumbnail is built from `job.resultStyles[0].url`. On a preview-mode job index 0 is locked, so this publishes a clean copy of the gated image to Stripe's CDN.
 
-- [ ] **Step 1: Replace the thumbnail builder**
+- [x] **Step 1: Replace the thumbnail builder**
 
 Replace:
 
@@ -408,7 +410,7 @@ Add to the imports:
 import { isResultIndexUnlocked } from "@/lib/result-access";
 ```
 
-- [ ] **Step 2: Typecheck and run the checkout tests**
+- [x] **Step 2: Typecheck and run the checkout tests**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typecheck && npx tsx tests/test_checkout_attribution_metadata.ts
@@ -416,7 +418,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typechec
 
 Expected: no type errors, test PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add app/api/checkout/route.ts && git commit -m "Use watermarked path for Stripe checkout thumbnail on locked jobs"
@@ -432,7 +434,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add app/api/
 
 Today any caller can `POST` one rating to a 1-image preview job and receive `paid: true, paidAmountCents: 0, tier: "signature"` plus full generation of the remaining 15 styles. The unlock is only ever meant for customers who received the "free HD if you give feedback" email, which is the only thing that sets `feedbackRequestSentAt`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_image_feedback_unlock_gate.ts`:
 
@@ -502,7 +504,7 @@ main().catch((error) => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_image_feedback_unlock_gate.ts
@@ -510,7 +512,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL on `rating alone must not unlock a job` — the first job comes back `paid: true`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `app/api/jobs/[jobId]/image-feedback/route.ts`, change the unlock condition. Replace:
 
@@ -529,7 +531,7 @@ with:
   if (!job.paid && wasInvitedToGiveFeedback && ratingsCount >= requiredCount) {
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_image_feedback_unlock_gate.ts
@@ -537,7 +539,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: PASS, printing `image feedback unlock requires an invited feedback job`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add "app/api/jobs/[jobId]/image-feedback/route.ts" tests/test_image_feedback_unlock_gate.ts && git commit -m "Gate image-feedback HD unlock on an invited feedback job"
@@ -555,7 +557,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add "app/api
 
 `/upload?ref=ANYCODE` currently writes any string to `localStorage.headshot_referral_code`, and the results page prefills the coupon input from it. Paired with a 100%-off code in `COUPON_CODES`, that URL is a free full set. The only code this flow legitimately carries is the `COMEBACK15` retargeting code, which the banner already treats as the sole known value.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_coupon_prefill_allowlist.ts`:
 
@@ -589,7 +591,7 @@ function main() {
 main();
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_coupon_prefill_allowlist.ts
@@ -597,7 +599,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL — `Cannot find module '../lib/referral-codes'`.
 
-- [ ] **Step 3: Create the allowlist module**
+- [x] **Step 3: Create the allowlist module**
 
 Create `lib/referral-codes.ts`:
 
@@ -619,7 +621,7 @@ export function isPrefillableCouponCode(code: string | null | undefined): boolea
 }
 ```
 
-- [ ] **Step 4: Update the upload page**
+- [x] **Step 4: Update the upload page**
 
 In `app/upload/UploadPageClient.tsx`, replace the whole referral capture effect (the block that starts with the `// Referral: capture ?ref=CODE from URL` comment and ends with the closing brace of its `else` branch) with:
 
@@ -659,7 +661,7 @@ Add to the imports at the top of the file:
 import { isPrefillableCouponCode, PREFILLABLE_COUPON_LABELS } from "@/lib/referral-codes";
 ```
 
-- [ ] **Step 5: Update the results page**
+- [x] **Step 5: Update the results page**
 
 In `app/results/[jobId]/ResultsPageClient.tsx`, replace the prefill effect at L746–761 with:
 
@@ -690,7 +692,7 @@ Add to the imports at the top of the file:
 import { isPrefillableCouponCode } from "@/lib/referral-codes";
 ```
 
-- [ ] **Step 6: Run the test to verify it passes**
+- [x] **Step 6: Run the test to verify it passes**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_coupon_prefill_allowlist.ts && npm run typecheck
@@ -698,7 +700,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: PASS, printing `coupon prefill is allowlisted and ?ref= is retired`, and no type errors. The customer can still type any code by hand — this only stops a URL from supplying one.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/referral-codes.ts app/upload/UploadPageClient.tsx "app/results/[jobId]/ResultsPageClient.tsx" tests/test_coupon_prefill_allowlist.ts && git commit -m "Allowlist coupon prefill codes and retire the ref query param"
@@ -714,7 +716,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/refe
 
 The endpoint flips a job to paid from any caller who knows a job id and a 100%-off code. The legitimate caller is always the results page on the device that created the job, which holds `ownerToken_<jobId>` in `localStorage` and already passes it to `GET /api/jobs/[jobId]`.
 
-- [ ] **Step 1: Add the owner check to the route**
+- [x] **Step 1: Add the owner check to the route**
 
 In `app/api/coupon/redeem/route.ts`, immediately after the existing `job.status !== "completed"` guard and before the `if (job.paid)` check, insert:
 
@@ -733,7 +735,7 @@ import { hasOwnerAccess } from "@/lib/api-auth";
 
 `allowLegacy: true` keeps pre-owner-token jobs redeemable, matching `hasOwnerAccess`'s documented behaviour elsewhere in the codebase.
 
-- [ ] **Step 2: Send the owner token from the client**
+- [x] **Step 2: Send the owner token from the client**
 
 In `app/results/[jobId]/ResultsPageClient.tsx`, inside `handleApplyCoupon`, replace:
 
@@ -759,7 +761,7 @@ with:
       });
 ```
 
-- [ ] **Step 3: Confirm `ownerTokenRef` is in scope**
+- [x] **Step 3: Confirm `ownerTokenRef` is in scope**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "ownerTokenRef" "app/results/[jobId]/ResultsPageClient.tsx" | head -5
@@ -767,7 +769,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "ownerTo
 
 Expected: a destructuring line from `useResultsJob` plus the new usage. If `ownerTokenRef` is not destructured in this component, add it to the existing `useResultsJob(jobId)` destructuring — the hook already returns it (`app/results/[jobId]/hooks/useResultsJob.ts:19`).
 
-- [ ] **Step 4: Typecheck and run the auth tests**
+- [x] **Step 4: Typecheck and run the auth tests**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typecheck && npx tsx tests/test_api_auth.ts
@@ -775,7 +777,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typechec
 
 Expected: no type errors, test PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add app/api/coupon/redeem/route.ts "app/results/[jobId]/ResultsPageClient.tsx" && git commit -m "Require owner token to redeem a coupon"
@@ -791,7 +793,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add app/api/
 
 The page had 0 pageviews in the last 30 days and advertises `FAMILY200` as "20% off" when it is a 100%-off code. A redirect is kept because the URL may exist in old emails.
 
-- [ ] **Step 1: Confirm nothing links to it**
+- [x] **Step 1: Confirm nothing links to it**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -rn '"/refer"\|'"'"'/refer'"'" app components lib --include=*.tsx --include=*.ts | grep -v "^app/refer/"
@@ -799,7 +801,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -rn '"/refe
 
 Expected: no output. If a link exists, remove it in this task before deleting the page.
 
-- [ ] **Step 2: Delete the page and add the redirect**
+- [x] **Step 2: Delete the page and add the redirect**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git rm -r app/refer
@@ -815,7 +817,7 @@ Then in `next.config.ts`, add a `redirects` entry. If the config already exports
   },
 ```
 
-- [ ] **Step 3: Verify the build still compiles**
+- [x] **Step 3: Verify the build still compiles**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typecheck && npm run build
@@ -823,7 +825,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typechec
 
 Expected: build succeeds and the route list no longer contains `/refer`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add -A app/refer next.config.ts && git commit -m "Delete orphan refer page and redirect to home"
@@ -833,7 +835,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add -A app/r
 
 ### Task 9: Full suite, PR, deploy
 
-- [ ] **Step 1: Run everything**
+- [x] **Step 1: Run everything**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run check
@@ -841,7 +843,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run check
 
 Expected: lint, typecheck, the whole `tests/` suite (including the three new files) and the production build all pass. Do not proceed on a red suite — fix it or report it.
 
-- [ ] **Step 2: Open the PR**
+- [x] **Step 2: Open the PR**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git push -u origin fix/phase0-paywall-leaks && gh pr create --title "Close three paywall bypasses (Phase 0)" --body "$(cat <<'EOF'
@@ -875,7 +877,7 @@ EOF
 )"
 ```
 
-- [ ] **Step 3: Rotate the production coupon codes (ops, after the PR merges)**
+- [ ] **Step 3: Rotate the production coupon codes (ops, after the PR merges)** — BLOCKED: no Vercel CLI credentials on this machine (`vercel login` required). Needs the user.
 
 This is the actual root-cause fix and it is an operational change to production configuration, not code. Remove every 100%-off entry from both variables, keeping any partial-discount codes:
 
@@ -891,7 +893,7 @@ printf '%s' 'COMEBACK15:15' | vercel env add COUPON_CODES production --force
 
 `lib/coupons.ts` caches the registry per serverless instance, so a redeploy is required for the change to take effect everywhere.
 
-- [ ] **Step 4: Verify on production**
+- [x] **Step 4: Verify on production**
 
 After the Vercel deploy finishes, walk the funnel on the real site rather than trusting the suite — four bugs have shipped past a green suite on this codebase before:
 
@@ -907,7 +909,7 @@ Then, with a real preview job created through the site:
 4. `POST /api/jobs/<previewJobId>/image-feedback` with one rating — expect the job to stay unpaid.
 5. Buy one real Signature order end to end (test against Signature, not just the $29 tier) and confirm all images download clean.
 
-- [ ] **Step 5: Report**
+- [x] **Step 5: Report**
 
 State which checks passed with their actual output, and flag anything that did not. Then stop — Phase 1 (attribution rail) is a separate plan.
 
