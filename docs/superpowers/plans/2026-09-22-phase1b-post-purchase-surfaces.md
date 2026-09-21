@@ -1,6 +1,8 @@
 # Phase 1b — Post-Purchase Surfaces Implementation Plan
 
-> **Tasks 1-6 built and pushed 2026-09-22** as [PR #45](https://github.com/ruzbeh/headshot-studio/pull/45). `npm run check` fully green. Awaiting CI, merge and the prod walk. The live blast needs founder approval before sending.
+> **MERGED 2026-09-22** as [PR #45](https://github.com/ruzbeh/headshot-studio/pull/45) (merge `622d19d`). `npm run check` fully green.
+>
+> **Two sends are deliberately withheld.** The day-10 cron is gated off behind `SHARE_NUDGE_ENABLED=1`: counting the real cohort before merging showed it would have emailed 48 customers within two hours, since everyone in the 14-day window is already past day 10. The one-time friend blast has not been sent either. Both are the founder's call.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -1086,7 +1088,7 @@ Expected: fully green. The suite was green on `origin/main` at `de0f060`, so any
 
 Title: `Post-purchase share, heard-from question, day-10 nudge (Phase 1b)`. The body should state the measured baseline (1 `share` event from ~45 buyers in 30 days), what replaced the dead buttons and why nothing carries a customer's face, the blast gate with its probabilities, and that no pre-purchase surface changed.
 
-- [ ] **Step 3: Wait for CI, then merge**
+- [x] **Step 3: Wait for CI, then merge**
 
 Read the bound PR's status rather than polling. If Vercel reports "Deployment was blocked", the commit author is wrong — see the note in the header.
 
