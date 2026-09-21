@@ -1,5 +1,7 @@
 # Phase 1b — Post-Purchase Surfaces Implementation Plan
 
+> **Tasks 1-6 built and pushed 2026-09-22** as [PR #45](https://github.com/ruzbeh/headshot-studio/pull/45). `npm run check` fully green. Awaiting CI, merge and the prod walk. The live blast needs founder approval before sending.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give a happy customer something worth passing on, ask her where she came from, and run the cheap experiment that decides whether the gift product gets built at all.
@@ -65,7 +67,7 @@ The `/stats` panel shipped in #42 showed `email.bt.com` as the source of a real 
 - Create: `lib/email-links.ts`
 - Test: `tests/test_email_links.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_email_links.ts`:
 
@@ -107,7 +109,7 @@ assert.strictEqual(withEmailVia("not a url", "nudge"), "not a url");
 console.log("email link via-tagging tests passed");
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_email_links.ts
@@ -115,7 +117,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL with `Cannot find module '../lib/email-links'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `lib/email-links.ts`:
 
@@ -146,7 +148,7 @@ export function withEmailVia(url: string, via: ViaLabel): string {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_email_links.ts
@@ -154,7 +156,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: PASS, printing `email link via-tagging tests passed`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/email-links.ts tests/test_email_links.ts && git commit -m "Tag outbound email links with a via label"
@@ -171,7 +173,7 @@ The cheapest possible read on whether word of mouth exists. About 32 people see 
 - Modify: `app/api/jobs/[jobId]/download-insight/route.ts`
 - Test: `tests/test_download_learning.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_download_learning.ts`, before its final `console.log`:
 
@@ -217,7 +219,7 @@ assert.deepStrictEqual(summary.heardFromCounts.ad, 1);
 
 Add `isDownloadHeardFrom` to that file's existing import from `../lib/download-learning`. The `downloadLearning` fixtures need whatever event shape the surrounding tests already use — check the top of the file and match it, since `buildDownloadLearningSummary` filters on `events.length > 0`.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_download_learning.ts
@@ -225,7 +227,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL — `isDownloadHeardFrom` is not exported.
 
-- [ ] **Step 3: Add the field to the model**
+- [x] **Step 3: Add the field to the model**
 
 In `lib/download-learning.ts`, after `DOWNLOAD_CHOICE_REASON_OPTIONS`, add:
 
@@ -278,7 +280,7 @@ In `completeDownloadLearning`, persist it in the returned object, after `choiceR
     ...(response.heardFrom ? { heardFrom: response.heardFrom } : {}),
 ```
 
-- [ ] **Step 4: Count it in the summary**
+- [x] **Step 4: Count it in the summary**
 
 In `buildDownloadLearningSummary`, build the counts and add them to the returned object:
 
@@ -296,7 +298,7 @@ and inside the `return { ... }`:
     heardFromCounts,
 ```
 
-- [ ] **Step 5: Accept it at the API**
+- [x] **Step 5: Accept it at the API**
 
 In `app/api/jobs/[jobId]/download-insight/route.ts`, find where the body is validated against `isDownloadIntendedUse` and `isDownloadChoiceReason`:
 
@@ -310,7 +312,7 @@ Add `isDownloadHeardFrom` to that import, and pass the field through to `complet
       ...(isDownloadHeardFrom(body.heardFrom) ? { heardFrom: body.heardFrom } : {}),
 ```
 
-- [ ] **Step 6: Run the tests and typecheck**
+- [x] **Step 6: Run the tests and typecheck**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_download_learning.ts && npx tsx tests/test_download_learning_persistence.ts && npx tsx tests/test_download_learning_routes.ts && npx tsx tests/test_download_learning_insights.ts && npm run typecheck
@@ -318,7 +320,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: all PASS, no type errors. `heardFrom` is optional at every layer, so stored two-answer responses stay valid.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/download-learning.ts "app/api/jobs/[jobId]/download-insight/route.ts" tests/test_download_learning.ts && git commit -m "Record how paying customers heard about us"
@@ -332,7 +334,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/down
 - Modify: `app/results/[jobId]/components/DownloadLearningPrompt.tsx`
 - Modify: `app/results/[jobId]/ResultsPageClient.tsx` (the `onSubmit` handler that posts the response)
 
-- [ ] **Step 1: Widen the component contract**
+- [x] **Step 1: Widen the component contract**
 
 In `DownloadLearningPrompt.tsx`, import the new option list and type:
 
@@ -364,7 +366,7 @@ Widen the `onSubmit` prop and the step state:
   const [heardFrom, setHeardFrom] = useState<DownloadHeardFrom | null>(null);
 ```
 
-- [ ] **Step 2: Render the third step**
+- [x] **Step 2: Render the third step**
 
 Read how step 2 renders its option list and its submit button:
 
@@ -385,7 +387,7 @@ onSubmit({
 
 Keep the existing dismiss affordance on every step. **Step 3 must be skippable**: the submit button stays enabled with `heardFrom` unset, so someone who does not want to answer still records the first two answers rather than dropping out entirely. Match the existing `isWomen` styling branch.
 
-- [ ] **Step 3: Pass it through from the results page**
+- [x] **Step 3: Pass it through from the results page**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "download-insight\|DownloadLearningPrompt" "app/results/[jobId]/ResultsPageClient.tsx"
@@ -393,7 +395,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "downloa
 
 In the handler that POSTs to `download-insight`, include `heardFrom` in the JSON body when present. The handler's parameter type widens to match the component's `onSubmit`.
 
-- [ ] **Step 4: Typecheck and build**
+- [x] **Step 4: Typecheck and build**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typecheck && npm run build
@@ -401,7 +403,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typechec
 
 Expected: no type errors, build succeeds.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add "app/results/[jobId]/components/DownloadLearningPrompt.tsx" "app/results/[jobId]/ResultsPageClient.tsx" && git commit -m "Add a skippable how-did-you-hear step to the download prompt"
@@ -419,7 +421,7 @@ The X and LinkedIn buttons share `window.location.origin` with a generic image, 
 - Modify: `lib/analytics.ts`
 - Test: `tests/test_post_purchase_actions.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_post_purchase_actions.ts`:
 
@@ -459,7 +461,7 @@ assert.ok(analytics.includes("trackFriendLinkCopied"), "copying the friend link 
 console.log("post purchase actions tests passed");
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_post_purchase_actions.ts
@@ -467,7 +469,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL — the component file does not exist.
 
-- [ ] **Step 3: Widen the analytics contract**
+- [x] **Step 3: Widen the analytics contract**
 
 In `lib/analytics.ts`, replace `trackShare` and add two events beside it:
 
@@ -488,7 +490,7 @@ export function trackCaptionCopied(jobId?: string): void {
 }
 ```
 
-- [ ] **Step 4: Write the component**
+- [x] **Step 4: Write the component**
 
 Create `app/results/[jobId]/components/PostPurchaseActions.tsx`. It takes over the whole `{paid && ...}` card, so it needs the props the old inline markup used: `jobId`, `variant`, `nouns`, `locale`, and the unlocked image indexes to share.
 
@@ -645,7 +647,7 @@ export function PostPurchaseActions({
 
 The caption carries no link and no brand mark by default. That is deliberate: the buyer paid for a photo that passes as real, and forcing an AI disclosure into her profile post is the objection that killed the poll designs.
 
-- [ ] **Step 5: Render it from the results page**
+- [x] **Step 5: Render it from the results page**
 
 In `ResultsPageClient.tsx`, replace the whole block from `{/* Post-purchase: sharing, upsell, review */}`'s opening `<div className="mt-12 space-y-6">` through the closing `</div>` of the four-cell grid card with:
 
@@ -674,7 +676,7 @@ Confirm `msg` versus `t` naming in that file before assuming, and confirm the lo
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "appendVariantParam\|const msg\|msg as\|from \"@/lib/i18n\"" "app/results/[jobId]/ResultsPageClient.tsx" | head -6
 ```
 
-- [ ] **Step 6: Run the test, typecheck, build**
+- [x] **Step 6: Run the test, typecheck, build**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_post_purchase_actions.ts && npm run typecheck && npm run build
@@ -682,7 +684,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: test PASS, no type errors, build succeeds.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add "app/results/[jobId]/components/PostPurchaseActions.tsx" "app/results/[jobId]/ResultsPageClient.tsx" lib/analytics.ts tests/test_post_purchase_actions.ts && git commit -m "Replace homepage share buttons with a private file share and spoken answer"
@@ -698,7 +700,7 @@ Research puts the median time to a referral at around 14 days, so day 10 is the 
 - Modify: `lib/email.ts`
 - Test: `tests/test_share_nudge_email.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_share_nudge_email.ts`:
 
@@ -737,7 +739,7 @@ assert.ok(!html.includes("/unsubscribe?via="), "unsubscribe must not be via-tagg
 console.log("share nudge email tests passed");
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_share_nudge_email.ts
@@ -745,7 +747,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL — `buildShareNudgeEmail` is not exported.
 
-- [ ] **Step 3: Write the builder and sender**
+- [x] **Step 3: Write the builder and sender**
 
 In `lib/email.ts`, add after `buildPaidResultsReminderEmail`:
 
@@ -829,11 +831,11 @@ Check the exact shape of `enqueueRenderedEmail`'s argument against a neighbourin
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "function enqueueRenderedEmail" -A 12 lib/email.ts
 ```
 
-- [ ] **Step 4: Tag the other outbound links**
+- [x] **Step 4: Tag the other outbound links**
 
 Apply `withEmailVia(..., "nudge")` to the results CTA in `buildPaidResultsReminderEmail` and `buildDripReminderEmail` so email clicks stop being logged as webmail referrals. Leave every `unsubUrl` untagged — `withEmailVia` already refuses those, but do not rely on that alone.
 
-- [ ] **Step 5: Run the tests and typecheck**
+- [x] **Step 5: Run the tests and typecheck**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_share_nudge_email.ts && npx tsx tests/test_email_functions.ts && npm run typecheck
@@ -841,7 +843,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: PASS, and the existing email tests still pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/email.ts tests/test_share_nudge_email.ts && git commit -m "Add the day-10 share nudge email"
@@ -856,7 +858,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/emai
 - Create: `app/api/admin/send-friend-blast/route.ts`
 - Test: `tests/test_share_nudge_email.ts` (extend)
 
-- [ ] **Step 1: Extend the test with the eligibility rules**
+- [x] **Step 1: Extend the test with the eligibility rules**
 
 Append to `tests/test_share_nudge_email.ts`, before its `console.log`:
 
@@ -891,7 +893,7 @@ assert.ok(/paidAmountCents/.test(blast), "the blast must target real buyers");
 assert.ok(blast.includes("emailOptOut"), "the blast must honour opt-outs");
 ```
 
-- [ ] **Step 2: Add the job field**
+- [x] **Step 2: Add the job field**
 
 In `lib/types.ts`, beside `feedbackRequestSentAt`, add:
 
@@ -908,7 +910,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n '"feedba
 
 Without the allowlist entry the write is silently dropped and the nudge would resend every 2 hours.
 
-- [ ] **Step 3: Add the cron branch**
+- [x] **Step 3: Add the cron branch**
 
 In `app/api/cron/drip-reminder/route.ts`, widen the fetch:
 
@@ -964,7 +966,7 @@ Add `sendShareNudgeEmail` to the `@/lib/email` import, and include `nudgeSent`, 
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "return NextResponse.json" app/api/cron/drip-reminder/route.ts
 ```
 
-- [ ] **Step 4: Write the blast route**
+- [x] **Step 4: Write the blast route**
 
 Create `app/api/admin/send-friend-blast/route.ts`, following the `send-feedback-request` pattern exactly (admin auth, `dryRun`, `limit`, `onlyEmail`, `sinceDays`, audit logging). It targets buyers with `paidAmountCents > 0`, not opted out, not refunded, without `shareNudgeSentAt`, and sets `shareNudgeSentAt` on send so the cron does not then send the same person the same email.
 
@@ -1054,7 +1056,7 @@ export async function POST(request: Request) {
 }
 ```
 
-- [ ] **Step 5: Run the tests, typecheck, build**
+- [x] **Step 5: Run the tests, typecheck, build**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_share_nudge_email.ts && npx tsx tests/test_drip_reminder_cron.ts && npm run typecheck && npm run build
@@ -1062,7 +1064,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: all PASS, no type errors, build succeeds. If `test_drip_reminder_cron.ts` asserts a jobs-window number, update it to 14 and note why in the commit.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add app/api/cron/drip-reminder/route.ts app/api/admin/send-friend-blast/route.ts lib/types.ts lib/store.ts tests/test_share_nudge_email.ts && git commit -m "Send the share nudge at day 10 and add the one-time friend blast"
@@ -1072,7 +1074,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add app/api/
 
 ### Task 7: Full suite, PR, deploy, prod walk
 
-- [ ] **Step 1: Run everything**
+- [x] **Step 1: Run everything**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run check
@@ -1080,7 +1082,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run check
 
 Expected: fully green. The suite was green on `origin/main` at `de0f060`, so any failure here is yours.
 
-- [ ] **Step 2: Open the PR**
+- [x] **Step 2: Open the PR**
 
 Title: `Post-purchase share, heard-from question, day-10 nudge (Phase 1b)`. The body should state the measured baseline (1 `share` event from ~45 buyers in 30 days), what replaced the dead buttons and why nothing carries a customer's face, the blast gate with its probabilities, and that no pre-purchase surface changed.
 
