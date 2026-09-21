@@ -1,5 +1,7 @@
 # Phase 1 — Attribution Rail Implementation Plan
 
+> **SHIPPED 2026-09-22.** All 7 code tasks merged as [PR #42](https://github.com/ruzbeh/headshot-studio/pull/42) (merge `34d4c9c`). Full suite green including the build.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make a non-paid order identifiable end to end, so a partner, friend link or gift can be credited with real money from Stripe rather than guessed at.
@@ -71,7 +73,7 @@ A partner or `via` label arrives from a URL typed by a human into a blog post or
 - Create: `lib/partner-attribution.ts`
 - Test: `tests/test_partner_attribution.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_partner_attribution.ts`:
 
@@ -113,7 +115,7 @@ assert.strictEqual(isKnownViaLabel(null), false);
 console.log("partner attribution code shape tests passed");
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_partner_attribution.ts
@@ -121,7 +123,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL with `Cannot find module '../lib/partner-attribution'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `lib/partner-attribution.ts`:
 
@@ -168,7 +170,7 @@ export function normalizeViaLabel(raw: string | null | undefined): ViaLabel | un
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_partner_attribution.ts
@@ -176,7 +178,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: PASS, printing `partner attribution code shape tests passed`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit plainly. Do **not** pass `-c user.name`/`-c user.email`: this repo's local git config is `ruzbeh <ruzbeh.001234@gmail.com>` and is authorised on Vercel, while an override makes Vercel reject the deployment with "Deployment was blocked".
 
@@ -192,7 +194,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/part
 - Modify: `lib/acquisition.ts`
 - Test: `tests/test_acquisition.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to the end of `tests/test_acquisition.ts`, immediately before its final `console.log` line:
 
@@ -262,7 +264,7 @@ const partnerWithClickId = buildAcquisitionContext({
 assert.ok(!serializeAcquisitionContext(partnerWithClickId).includes("do-not-store-this-click-id"));
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_acquisition.ts
@@ -270,7 +272,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL on the first new assertion, because `hasExplicitAcquisitionTouch` does not know `partner`.
 
-- [ ] **Step 3: Add `partner` to the context type**
+- [x] **Step 3: Add `partner` to the context type**
 
 In `lib/acquisition.ts`, add the field to `AcquisitionContext`, after `term`:
 
@@ -280,7 +282,7 @@ In `lib/acquisition.ts`, add the field to `AcquisitionContext`, after `term`:
   partner?: string;
 ```
 
-- [ ] **Step 4: Recognise the new params as an explicit touch**
+- [x] **Step 4: Recognise the new params as an explicit touch**
 
 Replace the whole `hasExplicitAcquisitionTouch` function with:
 
@@ -310,7 +312,7 @@ Add the import at the top of the file:
 import { isKnownViaLabel, normalizePartnerCode, normalizeViaLabel } from "./partner-attribution";
 ```
 
-- [ ] **Step 5: Derive source, medium, content and partner in `buildAcquisitionContext`**
+- [x] **Step 5: Derive source, medium, content and partner in `buildAcquisitionContext`**
 
 In `buildAcquisitionContext`, insert these three lines directly after the existing `const referrerHost = ...` line:
 
@@ -346,7 +348,7 @@ with:
     ...(partner && { partner }),
 ```
 
-- [ ] **Step 6: Carry `partner` through the cookie**
+- [x] **Step 6: Carry `partner` through the cookie**
 
 In `serializeAcquisitionContext`, add after the `referrerHost` line:
 
@@ -360,7 +362,7 @@ In `parseAcquisitionContext`, inside the returned object, add after the `referre
       ...(normalizePartnerCode(params.get("p")) && { partner: normalizePartnerCode(params.get("p")) }),
 ```
 
-- [ ] **Step 7: Run the test to verify it passes**
+- [x] **Step 7: Run the test to verify it passes**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_acquisition.ts && npx tsx tests/test_partner_attribution.ts && npm run typecheck
@@ -368,7 +370,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: both tests PASS and no type errors. The pre-existing assertions in `test_acquisition.ts` must still pass — in particular the one proving `fbclid` is never serialised.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/acquisition.ts tests/test_acquisition.ts && git commit -m "Capture partner and via labels in the acquisition context"
@@ -384,7 +386,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/acqu
 - Modify: `proxy.ts`
 - Test: `tests/test_attribution_rail_wiring.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_attribution_rail_wiring.ts`:
 
@@ -436,7 +438,7 @@ assert.ok(/redirect/i.test(friendRoute), "/friend should issue a redirect");
 console.log("attribution rail wiring tests passed");
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_attribution_rail_wiring.ts
@@ -444,7 +446,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL on the first assertion, `proxy should use the PARTNER_COOKIE constant`.
 
-- [ ] **Step 3: Add the handler to `proxy.ts`**
+- [x] **Step 3: Add the handler to `proxy.ts`**
 
 Insert this function immediately after `maybeSetAcquisition` (which ends just before the `/** Capture ?pw= query param ... */` comment):
 
@@ -485,7 +487,7 @@ import {
 } from "@/lib/partner-attribution";
 ```
 
-- [ ] **Step 4: Wire it into the response chain**
+- [x] **Step 4: Wire it into the response chain**
 
 Find the composed call near `proxy.ts:285`:
 
@@ -507,7 +509,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "maybeSe
 
 Every call site that builds a response for a normal page request must be wrapped the same way. Wrap each one you find.
 
-- [ ] **Step 5: Confirm the proxy runs on the paths that carry partner links**
+- [x] **Step 5: Confirm the proxy runs on the paths that carry partner links**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "matcher" -A 12 proxy.ts | tail -20
@@ -515,7 +517,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "matcher
 
 The matcher must cover `/`, `/for/:path*` and `/friend`. If it uses an exclusion pattern (everything except `_next`, static files and so on) these are already covered and nothing changes. If it uses an explicit include list, add `/friend`. Record which it is in the commit message.
 
-- [ ] **Step 6: Typecheck**
+- [x] **Step 6: Typecheck**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typecheck
@@ -523,7 +525,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typechec
 
 Expected: no errors.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add proxy.ts && git commit -m "Set a first-touch partner cookie in the proxy"
@@ -539,7 +541,7 @@ The cookie is httpOnly, so the job row is where partner credit becomes durable. 
 - Modify: `app/api/jobs/route.ts`
 - Test: `tests/test_attribution_rail_wiring.ts` (written in Task 3)
 
-- [ ] **Step 1: Read the current call site**
+- [x] **Step 1: Read the current call site**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && sed -n 105,125p app/api/jobs/route.ts
@@ -547,7 +549,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && sed -n 105,125p 
 
 Expected: a `const requestAcquisition = resolveRequestAcquisition({ ... })` call taking `cookieHeader`, `userAgent` and `fallbackLandingPath`.
 
-- [ ] **Step 2: Layer the partner code on top**
+- [x] **Step 2: Layer the partner code on top**
 
 Directly after that `const requestAcquisition = resolveRequestAcquisition({ ... });` statement, add:
 
@@ -569,7 +571,7 @@ Add the import beside the existing `@/lib/acquisition` import:
 import { PARTNER_COOKIE, normalizePartnerCode } from "@/lib/partner-attribution";
 ```
 
-- [ ] **Step 3: Use the merged value everywhere the old one was used**
+- [x] **Step 3: Use the merged value everywhere the old one was used**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "requestAcquisition" app/api/jobs/route.ts
@@ -577,7 +579,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "request
 
 Expected: the declaration plus uses near lines 153 and 161 (the lead-stub reuse branch and the create branch). Replace every use **after** the new `const acquisition` declaration with `acquisition`, leaving the declaration itself alone. Re-run the grep and confirm `requestAcquisition` now appears only in its own declaration and in the `acquisition` expression.
 
-- [ ] **Step 4: Run the wiring test and typecheck**
+- [x] **Step 4: Run the wiring test and typecheck**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_attribution_rail_wiring.ts; npm run typecheck
@@ -585,7 +587,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: the test still fails, but now only on the `app/friend/route.ts` assertions (Task 5). Typecheck clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add app/api/jobs/route.ts && git commit -m "Store first-touch partner credit on the job"
@@ -601,7 +603,7 @@ A short, sayable URL for the moment a customer is asked where she got her photo.
 - Create: `app/friend/route.ts`
 - Test: `tests/test_attribution_rail_wiring.ts` (written in Task 3)
 
-- [ ] **Step 1: Write the implementation**
+- [x] **Step 1: Write the implementation**
 
 Create `app/friend/route.ts`:
 
@@ -622,7 +624,7 @@ export function GET(request: Request) {
 
 A 302 rather than a 308: the destination is a marketing page that may move, and a permanent redirect would be cached in browsers indefinitely.
 
-- [ ] **Step 2: Run the wiring test to verify it passes**
+- [x] **Step 2: Run the wiring test to verify it passes**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_attribution_rail_wiring.ts
@@ -630,7 +632,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: PASS, printing `attribution rail wiring tests passed`.
 
-- [ ] **Step 3: Verify the redirect and the cookie locally**
+- [x] **Step 3: Verify the redirect and the cookie locally**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run build
@@ -638,7 +640,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run build
 
 Expected: the build succeeds and the route list includes `/friend`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add app/friend/route.ts tests/test_attribution_rail_wiring.ts && git commit -m "Add the /friend referral link"
@@ -654,7 +656,7 @@ Two gaps: `content` never reaches Stripe although it is captured, and `metadata`
 - Modify: `app/api/checkout/route.ts`, `app/api/checkout/redirect/route.ts`, `app/api/checkout/upgrade/route.ts`, `app/api/checkout/upgrade/redirect/route.ts`, `app/api/subscription/checkout/route.ts`, `app/api/subscription/checkout/redirect/route.ts`
 - Test: `tests/test_checkout_attribution_metadata.ts`
 
-- [ ] **Step 1: Extend the existing test**
+- [x] **Step 1: Extend the existing test**
 
 In `tests/test_checkout_attribution_metadata.ts`, add the two new keys to the `for` loop's key list, so it reads:
 
@@ -689,7 +691,7 @@ Finally update the count in the last line so it reflects the new total:
 console.log("checkout attribution metadata tests passed");
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_checkout_attribution_metadata.ts
@@ -697,7 +699,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL with `app/api/checkout/route.ts should put acquisition_partner into Stripe metadata`.
 
-- [ ] **Step 3: Add the two keys in all six routes**
+- [x] **Step 3: Add the two keys in all six routes**
 
 In each of the six routes, find the `metadata` object that already spreads the acquisition fields and add these two lines after the `acquisition_device` line. In the four order routes the object is named `job`:
 
@@ -719,7 +721,7 @@ Check each route for the exact variable name before editing:
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "acquisition_device" app/api/checkout/route.ts app/api/checkout/redirect/route.ts app/api/checkout/upgrade/route.ts app/api/checkout/upgrade/redirect/route.ts app/api/subscription/checkout/route.ts app/api/subscription/checkout/redirect/route.ts
 ```
 
-- [ ] **Step 4: Mirror the metadata onto the payment intent**
+- [x] **Step 4: Mirror the metadata onto the payment intent**
 
 In the four order routes, each has `payment_intent_data: { statement_descriptor: "HEADSHOTGEN" }`. Change each to:
 
@@ -735,7 +737,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "const m
 
 If a route names it differently, use that route's own name. The two subscription routes use `subscription_data: { metadata }` and have no payment intent, so leave them as they are.
 
-- [ ] **Step 5: Run the test and typecheck**
+- [x] **Step 5: Run the test and typecheck**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_checkout_attribution_metadata.ts && npm run typecheck
@@ -743,7 +745,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: PASS and no type errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add app/api/checkout app/api/subscription tests/test_checkout_attribution_metadata.ts && git commit -m "Send partner and content attribution to Stripe and the payment intent"
@@ -760,7 +762,7 @@ Without a readout the rail is invisible and the Phase 2a gate cannot be judged. 
 - Modify: `app/stats/StatsClient.tsx`
 - Test: `tests/test_stats_acquisition_panel.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_stats_acquisition_panel.ts`:
 
@@ -832,7 +834,7 @@ assert.strictEqual(duplicated.totalOrders, 1, "one job must not count twice");
 console.log("stats acquisition summary tests passed");
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_stats_acquisition_panel.ts
@@ -840,7 +842,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL with `Cannot find module '../lib/acquisition-summary'`.
 
-- [ ] **Step 3: Write the aggregation**
+- [x] **Step 3: Write the aggregation**
 
 Create `lib/acquisition-summary.ts`:
 
@@ -936,7 +938,7 @@ export function summarizeAcquisition(sessions: AcquisitionSessionLike[]): Acquis
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_stats_acquisition_panel.ts
@@ -944,7 +946,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: PASS, printing `stats acquisition summary tests passed`.
 
-- [ ] **Step 5: Feed it from the stats route**
+- [x] **Step 5: Feed it from the stats route**
 
 `app/api/admin/stats/route.ts` already pages `stripe.checkout.sessions.list` inside `loadStripeFunnelSince`, but that function filters to a job cohort and returns only id sets. Add a second, independent loader beneath it so the acquisition panel covers every real order in the window, not just jobs in the 30-day cohort:
 
@@ -1008,7 +1010,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "loadStr
 
 Egress note: this adds Stripe API calls, not Supabase reads. Do not add a jsonb scan here — the Supabase project was suspended for egress on 2026-06-25, and `listRecentJobs(30)` is already loaded in this handler.
 
-- [ ] **Step 6: Render the panel**
+- [x] **Step 6: Render the panel**
 
 In `app/stats/StatsClient.tsx`, add a section following the existing pattern (a `<section className="rounded-2xl border border-stone-200 bg-white p-5 sm:p-6">` with an `<h2 className="text-lg font-semibold text-stone-900">`). Place it directly after the "7-day conversion funnel" section so the two revenue readouts sit together:
 
@@ -1092,7 +1094,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "funnel7
 
 Match whatever shape that type declaration uses, and confirm `Kpi`'s props (`label`, `value`, `sub`, `accent`, `compact`) against its definition near the bottom of the file before using them.
 
-- [ ] **Step 7: Typecheck and build**
+- [x] **Step 7: Typecheck and build**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typecheck && npm run build
@@ -1100,7 +1102,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typechec
 
 Expected: no type errors, build succeeds.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/acquisition-summary.ts app/api/admin/stats/route.ts app/stats/StatsClient.tsx tests/test_stats_acquisition_panel.ts && git commit -m "Add a real-money acquisition panel to /stats"
@@ -1110,7 +1112,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/acqu
 
 ### Task 8: Full suite, PR, deploy, prod walk
 
-- [ ] **Step 1: Run everything**
+- [x] **Step 1: Run everything**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run check
@@ -1124,7 +1126,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && python3 -m pytes
 
 Any failure outside `test_lp_hero_rewrite.py` is yours. Fix it before continuing.
 
-- [ ] **Step 2: Open the PR**
+- [x] **Step 2: Open the PR**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git push -u origin feat/attribution-rail && gh pr create --title "Attribution rail: partner and referral credit end to end (Phase 1)" --body "$(cat <<'EOF'
@@ -1164,11 +1166,11 @@ EOF
 )"
 ```
 
-- [ ] **Step 3: Wait for CI, then merge**
+- [x] **Step 3: Wait for CI, then merge**
 
 Check the bound PR's status rather than polling `gh pr checks`. The Vercel check must be green. If it reports "Deployment was blocked", the commit author is wrong — see the note in Task 1 Step 5.
 
-- [ ] **Step 4: Prod walk**
+- [ ] **Step 4: Prod walk** — in progress at time of writing
 
 A green suite has hidden four real bugs on this codebase before, so verify against production after the deploy. Substitute a real job id you create through the site.
 
@@ -1183,7 +1185,7 @@ Expected: `/friend` redirects carrying `via=friend`; a valid partner code sets a
 
 Then walk a real order: visit `/?partner=TESTCOACH`, create a job, and take it through checkout with a test coupon. Confirm in the Stripe dashboard that **both** the session and the payment intent carry `acquisition_partner=testcoach`, and that `/stats` shows the order under both the source table and the partner table. Confirm a `$0` coupon unlock does **not** appear in either.
 
-- [ ] **Step 5: Report**
+- [x] **Step 5: Report**
 
 State what passed with actual output, and name anything unverified. Then stop; Phase 1b is a separate plan.
 
