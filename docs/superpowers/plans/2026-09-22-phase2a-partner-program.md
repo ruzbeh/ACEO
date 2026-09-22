@@ -1,5 +1,7 @@
 # Phase 2a — Partner Program Implementation Plan
 
+> **SHIPPED 2026-09-22** as [PR #46](https://github.com/ruzbeh/headshot-studio/pull/46) (merge `30756e4`). Verified end to end against live Stripe: $29 → $24.65 with `acquisition_partner` in the metadata. `charge.refunded` had to be added to the webhook endpoint, which was not subscribed. Zero active partners: recruiting is the remaining work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the partner label the rail already carries into a real programme: a validated partner, a discount their client can see, a payout figure that is safe to pay, and a page that explains the terms.
@@ -58,7 +60,7 @@ Two consequences for how you build:
 **Files:**
 - Create: `supabase/migrations/008_partners.sql`
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 ```sql
 -- Migration 008: Partner programme.
@@ -81,7 +83,7 @@ create table if not exists public.partners (
 create index if not exists partners_active_idx on public.partners (active);
 ```
 
-- [ ] **Step 2: Apply it**
+- [x] **Step 2: Apply it**
 
 Migrations in this project are run by hand in the Supabase dashboard SQL editor, the same way 004 and 007 were. Paste the file and run it, then confirm:
 
@@ -92,7 +94,7 @@ curl -s "$SUPABASE_URL/rest/v1/partners?select=code&limit=1" -H "apikey: $SUPABA
 
 Expected: `[]` rather than an error about a missing relation.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add supabase/migrations/008_partners.sql && git commit -m "Add partners table"
@@ -106,7 +108,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add supabase
 - Create: `lib/partners.ts`
 - Test: `tests/test_partners.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_partners.ts`:
 
@@ -175,7 +177,7 @@ assert.deepStrictEqual(computePartnerPayouts([order({ partnerCode: "ghost" })], 
 console.log("partner payout tests passed");
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_partners.ts
@@ -183,7 +185,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: `Cannot find module '../lib/partners'`.
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 Create `lib/partners.ts`. Follow `lib/drops-store.ts`: Supabase when configured, in-memory `Map` otherwise.
 
@@ -357,7 +359,7 @@ export function __setMemoryPartner(partner: Partner): void {
 }
 ```
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_partners.ts && npm run typecheck
@@ -365,7 +367,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: PASS, no type errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add lib/partners.ts tests/test_partners.ts && git commit -m "Add partner lookup and payout maths"
@@ -381,7 +383,7 @@ The partner promises their audience something. This is that something, applied s
 - Modify: `app/api/checkout/route.ts`, `app/api/checkout/redirect/route.ts`, `app/api/checkout/upgrade/route.ts`, `app/api/checkout/upgrade/redirect/route.ts`
 - Test: `tests/test_partner_discount.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_partner_discount.ts`:
 
@@ -419,7 +421,7 @@ for (const route of routes) {
 console.log("partner discount wiring tests passed");
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_partner_discount.ts
@@ -427,7 +429,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: FAIL on `app/api/checkout/route.ts should resolve the partner`.
 
-- [ ] **Step 3: Apply the discount in each route**
+- [x] **Step 3: Apply the discount in each route**
 
 In every one of the four routes, find where `stripeCouponId` is computed:
 
@@ -455,7 +457,7 @@ Add the import:
 import { getActivePartner } from "@/lib/partners";
 ```
 
-- [ ] **Step 4: Check each route really switched**
+- [x] **Step 4: Check each route really switched**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "discounts: \[{ coupon:\|allow_promotion_codes" app/api/checkout/route.ts app/api/checkout/redirect/route.ts app/api/checkout/upgrade/route.ts app/api/checkout/upgrade/redirect/route.ts
@@ -463,7 +465,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n "discoun
 
 Every one of those lines must reference `effectiveCouponId`, not `stripeCouponId`.
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/test_partner_discount.ts && npx tsx tests/test_checkout_attribution_metadata.ts && npm run typecheck
@@ -471,7 +473,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npx tsx tests/te
 
 Expected: all PASS.
 
-- [ ] **Step 6: Create the Stripe coupon and note its id**
+- [x] **Step 6: Create the Stripe coupon and note its id**
 
 One 15%-off coupon shared by all partners at the default rate, created once:
 
@@ -496,7 +498,7 @@ npx tsx scripts/_mint_partner_coupon.ts; rm -f scripts/_mint_partner_coupon.ts
 
 Record the printed id. It goes in each partner row's `stripe_coupon_id`, not in an env var, so a partner can later be given a different rate without a deploy.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add app/api/checkout tests/test_partner_discount.ts && git commit -m "Apply the partner client discount server-side"
@@ -511,7 +513,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && git add app/api/
 **Files:**
 - Modify: `app/api/webhooks/stripe/route.ts`
 
-- [ ] **Step 1: Confirm the job already has refund fields**
+- [x] **Step 1: Confirm the job already has refund fields**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n '"refunded"\|"stripeRefundId"' lib/store.ts && grep -n "refunded?:" lib/types.ts
@@ -519,7 +521,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && grep -n '"refund
 
 Expected: both already exist in the `updateJob` allowlist and on the `Job` type. Do not add new fields.
 
-- [ ] **Step 2: Add the branch**
+- [x] **Step 2: Add the branch**
 
 In `app/api/webhooks/stripe/route.ts`, beside the existing `if (event.type === "checkout.session.completed")`, add:
 
@@ -541,7 +543,7 @@ In `app/api/webhooks/stripe/route.ts`, beside the existing `if (event.type === "
 
 Place it before the `checkout.session.completed` branch so it returns early. Confirm `updateJob` and `auditLog` are already imported in this file, and check the `Stripe` type import name matches what the file uses.
 
-- [ ] **Step 3: Enable the event in Stripe**
+- [x] **Step 3: Enable the event in Stripe**
 
 The webhook endpoint must be subscribed to `charge.refunded` or the branch never fires. Check and add it in the Stripe dashboard under Developers → Webhooks, or verify with:
 
@@ -556,7 +558,7 @@ for e in json.load(sys.stdin).get('data',[]):
 
 If `charge.refunded` is absent, add it. **Without this the code is dead.**
 
-- [ ] **Step 4: Typecheck and commit**
+- [x] **Step 4: Typecheck and commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typecheck && git add app/api/webhooks/stripe/route.ts && git commit -m "Mark jobs refunded from the charge.refunded webhook"
@@ -569,7 +571,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typechec
 **Files:**
 - Modify: `app/api/admin/stats/route.ts`, `app/stats/StatsClient.tsx`
 
-- [ ] **Step 1: Build the order list in the stats route**
+- [x] **Step 1: Build the order list in the stats route**
 
 `loadAcquisitionSince` already pages Stripe sessions for the acquisition panel. Extend it to also return partner orders rather than adding a second pass over Stripe. For each paid session with `amount_total > 0` and an `acquisition_partner`, emit a `PartnerOrder` using `metadata.jobId`, the customer email from the session, `amount_total`, the session's `created`, and the refunded flag from the matching job.
 
@@ -586,7 +588,7 @@ Add `listActivePartners()` to `lib/partners.ts` following the same Supabase-or-m
 
 Add `partnerPayouts` to the JSON response.
 
-- [ ] **Step 2: Render it**
+- [x] **Step 2: Render it**
 
 In `app/stats/StatsClient.tsx`, add a section after the acquisition panel, matching the existing card markup:
 
@@ -627,7 +629,7 @@ In `app/stats/StatsClient.tsx`, add a section after the acquisition panel, match
 
 Add the matching field to the component's stats type.
 
-- [ ] **Step 3: Typecheck, build, commit**
+- [x] **Step 3: Typecheck, build, commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typecheck && npm run build && git add app/api/admin/stats/route.ts app/stats/StatsClient.tsx lib/partners.ts && git commit -m "Show partner payouts due on /stats"
@@ -640,17 +642,17 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run typechec
 **Files:**
 - Create: `app/partners/page.tsx`, `scripts/add-partner.ts`
 
-- [ ] **Step 1: Write the page**
+- [x] **Step 1: Write the page**
 
 A single static page stating the terms from `docs/partners/outreach-kit.md`: 30% of what the client pays, first purchase only, 60-day first-touch cookie, monthly PayPal, $25 minimum, 30-day hold, disclosure required, no self-referral. Close with "email <address> and I'll set up your link" — no signup form, because there is no volume to justify one.
 
 Follow an existing static page such as `app/privacy/page.tsx` for layout, header and footer. Add `/partners` to `publicPaths` in `app/sitemap.ts`.
 
-- [ ] **Step 2: Write the CLI**
+- [x] **Step 2: Write the CLI**
 
 `scripts/add-partner.ts` inserts a row, taking code, name, email, segment and the coupon id from argv or env, validating the code through `normalizePartnerCode` so an invalid code cannot be inserted.
 
-- [ ] **Step 3: Build and commit**
+- [x] **Step 3: Build and commit**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run build && git add app/partners scripts/add-partner.ts app/sitemap.ts && git commit -m "Add the partners terms page and an add-partner script"
@@ -660,7 +662,7 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run build &&
 
 ### Task 7: Suite, PR, deploy, verify
 
-- [ ] **Step 1: Full check**
+- [x] **Step 1: Full check**
 
 ```bash
 cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run check
@@ -668,11 +670,11 @@ cd /Users/ruzbeh.i/IdeaProjects/SIdeProjects/headshot-studio && npm run check
 
 Expected: fully green. `origin/main` was green before this branch, so any failure is yours.
 
-- [ ] **Step 2: PR, CI, merge**
+- [x] **Step 2: PR, CI, merge**
 
 Body should state that unknown partner codes still attribute and simply earn nothing, that the discount is server-applied and cannot be typed, that payouts require real money past a 30-day hold with self-referral excluded, and that the `charge.refunded` event had to be enabled in the Stripe dashboard.
 
-- [ ] **Step 3: Verify on production with a real partner code**
+- [x] **Step 3: Verify on production with a real partner code**
 
 Insert a test partner, then walk it:
 
@@ -690,7 +692,7 @@ Deactivate the test partner when done:
 update public.partners set active = false where code = 'testcoach';
 ```
 
-- [ ] **Step 4: Report**
+- [x] **Step 4: Report**
 
 State what passed with real output. Then stop: recruiting partners is founder work, and the outreach kit is ready.
 
